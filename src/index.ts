@@ -213,6 +213,10 @@ async function notify(text: string): Promise<void> {
     await bot.telegram.sendMessage(NOTIFY_CHANNEL, text, { parse_mode: 'Markdown' });
   } catch (err: any) {
     console.warn('[Notify]', err.message);
+    try {
+      const clean = text.replace(/[*_`\[\]]/g, '');
+      await bot.telegram.sendMessage(NOTIFY_CHANNEL, clean);
+    } catch {}
   }
 }
 
@@ -308,7 +312,12 @@ async function safeEdit(chatId: string | number, msgId: number, text: string, ex
     await bot.telegram.editMessageText(String(chatId), msgId, undefined, text, {
       parse_mode: 'Markdown', ...extra
     });
-  } catch {}
+  } catch (err: any) {
+    try {
+      const clean = text.replace(/[*_`\[\]]/g, '');
+      await bot.telegram.editMessageText(String(chatId), msgId, undefined, clean, extra);
+    } catch {}
+  }
 }
 
 async function runBatch(
@@ -1592,17 +1601,25 @@ setInterval(async () => {
 // Launch
 // ────────────────────────────────────────────────────────────────────────────
 
-(async () => {
-  const me = await bot.telegram.getMe();
-  console.log('==============================================');
-  console.log(`🤖  LLBM Money Bot started!`);
-  console.log(`    @${me.username} (ID: ${me.id})`);
-  console.log(`    Max chunk:   ${fmtShort(MAX_CHUNK)}`);
-  console.log(`    Cooldown:    ${COOLDOWN_S}s between every transfer`);
-  console.log(`    Notify:      ${NOTIFY_CHANNEL}`);
-  console.log('==============================================');
+process.on('unhandledRejection', (reason: any) => {
+  console.warn('[Unhandled Rejection]:', reason?.message || reason);
+});
 
-  bot.launch({ dropPendingUpdates: true });
+(async () => {
+  try {
+    const me = await bot.telegram.getMe();
+    console.log('==============================================');
+    console.log(`🤖  LLBM Money Bot started!`);
+    console.log(`    @${me.username} (ID: ${me.id})`);
+    console.log(`    Max chunk:   ${fmtShort(MAX_CHUNK)}`);
+    console.log(`    Cooldown:    ${COOLDOWN_S}s between every transfer`);
+    console.log(`    Notify:      ${NOTIFY_CHANNEL}`);
+    console.log('==============================================');
+
+    await bot.launch({ dropPendingUpdates: true });
+  } catch (err: any) {
+    console.error('[Telegraf launch error]:', err?.message || err);
+  }
 
   process.once('SIGINT',  () => bot.stop('SIGINT'));
   process.once('SIGTERM', () => bot.stop('SIGTERM'));
