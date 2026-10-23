@@ -11,10 +11,6 @@ import {
   updateUserId,
   clearSession,
   isAuthenticated,
-  setQuiloxAutoPick,
-  recordQuiloxPick,
-  getQuiloxStats,
-  getAllAutoPickerUsers,
 } from './session';
 import {
   llLogin,
@@ -22,8 +18,6 @@ import {
   sendMoney,
   getBalance,
   getProfile,
-  isQuiloxOpen,
-  pickQuiloxMoney,
 } from './api';
 import {
   recordTransfer,
@@ -237,9 +231,9 @@ function mainMenu(loggedIn: boolean) {
   if (loggedIn) {
     return Markup.keyboard([
       ['💸 Send Money',        '💰 My Balance'],
-      ['💎 Support LLBM',      '🪩 Quilox Picker'],
-      ['📋 Transfer History',  '👤 My Account'],
-      ['🔐 Set/Update PIN',    '🔓 Logout'],
+      ['💎 Support LLBM',      '📋 Transfer History'],
+      ['👤 My Account',        '🔐 Set/Update PIN'],
+      ['🔓 Logout'],
     ]).resize();
   }
   return Markup.keyboard([['🔑 Login']]).resize();
@@ -615,7 +609,6 @@ bot.start(async (ctx) => {
       `✅ *32s cooldown* handled automatically between chunks\n` +
       `✅ Multi-recipient — send to *many users at once*\n` +
       `✅ Support the *LLBM Movement* directly\n` +
-      `✅ Pick money from *Quilox Nightclub* when open\n` +
       `✅ Transfer PIN support\n` +
       `✅ Multiple users, fully isolated\n\n` +
       `👇 Tap *Login* to begin.`,
@@ -634,7 +627,6 @@ bot.help(async (ctx) => {
     `/login — Connect your LagosLife account\n` +
     `/send — Send money (single or multi-recipient)\n` +
     `/support — Send money directly to support LLBM Movement\n` +
-    `/quilox — Pick money from Quilox nightclub floor when open\n` +
     `/balance — Check your wallet balance\n` +
     `/history — Last 10 transfers\n` +
     `/account — Your account & Player ID details\n` +
@@ -693,204 +685,6 @@ async function handleSupportLLBM(ctx: any) {
     await ctx.reply(promptText, { parse_mode: 'Markdown', ...Markup.removeKeyboard() });
   }
 }
-
-// ────────────────────────────────────────────────────────────────────────────
-// QUILOX NIGHTCLUB FLOOR PICKER
-// ────────────────────────────────────────────────────────────────────────────
-
-function quiloxDashboardText(
-  llUsername: string,
-  stats: { totalPicked: number; pickCount: number; lastPickAt?: string },
-  autoPick: boolean,
-  balance?: number
-): { text: string; keyboard: any } {
-  const club = isQuiloxOpen();
-  const sep = '━━━━━━━━━━━━━━━━━━━━━━━━━';
-
-  const autoPickStatus = autoPick ? '🟢 *Enabled (Active)*' : '🔴 *Disabled*';
-  const balStr = balance !== undefined ? `\n💰 *Wallet Balance:* ${fmtFull(balance)} _(${fmtShort(balance)})_` : '';
-  const lastPickStr = stats.lastPickAt
-    ? `\n⏱️ *Last Pick:* ${new Date(stats.lastPickAt).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' })}`
-    : '';
-
-  const text =
-    `🪩 *Quilox Nightclub Floor Picker*\n` +
-    `${sep}\n` +
-    `👤 *Account:* @${llUsername}${balStr}\n` +
-    `📍 *Venue:* Quilox VIP Floor (clubEko)\n` +
-    `🕒 *Club Status:* ${club.statusText}\n` +
-    `${sep}\n` +
-    `💰 *Total Picked Tonight:* ${fmtFull(stats.totalPicked)} _(${fmtShort(stats.totalPicked)})_\n` +
-    `📦 *Successful Scoops:* ${stats.pickCount} time(s)${lastPickStr}\n` +
-    `🤖 *Auto-Picker:* ${autoPickStatus}\n` +
-    `${sep}\n` +
-    `ℹ️ *How it works:*\n` +
-    `• Big spenders spray millions on the VIP floor at Quilox.\n` +
-    `• When open (*10:00 PM – 5:00 AM WAT*), you can scoop cash bundles directly into your LagosLife wallet!\n` +
-    `• Turn on *Auto-Picker* to automatically collect dropped cash every minute while the club is open!`;
-
-  const keyboard = Markup.inlineKeyboard([
-    [
-      Markup.button.callback('🪩 Scoop Money Now', 'quilox_scoop_now'),
-      Markup.button.callback(autoPick ? '🛑 Turn OFF Auto-Pick' : '🤖 Turn ON Auto-Pick', 'quilox_toggle_auto'),
-    ],
-    [
-      Markup.button.callback('🔄 Refresh Status', 'quilox_refresh'),
-      Markup.button.callback('💰 Check Balance', 'quilox_check_balance'),
-    ],
-  ]);
-
-  return { text, keyboard };
-}
-
-bot.command('quilox', handleQuilox);
-bot.hears('🪩 Quilox Picker', handleQuilox);
-
-async function handleQuilox(ctx: any) {
-  const chatId = String(ctx.chat?.id || ctx.from?.id);
-  if (!isAuthenticated(chatId)) return ctx.reply('🔒 Please /login first.', mainMenu(false));
-
-  const u = getUser(chatId)!;
-  const stats = getQuiloxStats(chatId);
-  const bal = await getBalance(chatId);
-  const autoPick = Boolean(u.quilox_auto_pick);
-
-  const { text, keyboard } = quiloxDashboardText(u.ll_username, stats, autoPick, bal?.balance);
-  if (ctx.callbackQuery) {
-    await ctx.answerCbQuery();
-    await ctx.editMessageText(text, { parse_mode: 'Markdown', ...keyboard });
-  } else {
-    await ctx.reply(text, { parse_mode: 'Markdown', ...keyboard });
-  }
-}
-
-bot.action('quilox_refresh', async (ctx) => {
-  const chatId = String(ctx.chat!.id);
-  if (!isAuthenticated(chatId)) {
-    await ctx.answerCbQuery('Session expired. Please /login.');
-    return;
-  }
-  await ctx.answerCbQuery('Refreshing Quilox status…');
-  const u = getUser(chatId)!;
-  const stats = getQuiloxStats(chatId);
-  const bal = await getBalance(chatId);
-  const autoPick = Boolean(u.quilox_auto_pick);
-
-  const { text, keyboard } = quiloxDashboardText(u.ll_username, stats, autoPick, bal?.balance);
-  try {
-    await ctx.editMessageText(text, { parse_mode: 'Markdown', ...keyboard });
-  } catch {}
-});
-
-bot.action('quilox_check_balance', async (ctx) => {
-  const chatId = String(ctx.chat!.id);
-  if (!isAuthenticated(chatId)) {
-    await ctx.answerCbQuery('Session expired. Please /login.');
-    return;
-  }
-  await ctx.answerCbQuery('Checking balance…');
-  const bal = await getBalance(chatId);
-  if (bal) {
-    await ctx.reply(`💰 *Current Balance:* ${fmtFull(bal.balance)} _(${fmtShort(bal.balance)})_`, { parse_mode: 'Markdown' });
-  } else {
-    await ctx.reply('⚠️ Could not fetch balance. Try again.');
-  }
-});
-
-bot.action('quilox_toggle_auto', async (ctx) => {
-  const chatId = String(ctx.chat!.id);
-  if (!isAuthenticated(chatId)) {
-    await ctx.answerCbQuery('Session expired. Please /login.');
-    return;
-  }
-
-  const u = getUser(chatId)!;
-  const current = Boolean(u.quilox_auto_pick);
-  const nextState = !current;
-
-  setQuiloxAutoPick(chatId, nextState);
-  await ctx.answerCbQuery(nextState ? '🤖 Auto-Picker ON!' : '🛑 Auto-Picker OFF');
-
-  const stats = getQuiloxStats(chatId);
-  const bal = await getBalance(chatId);
-  const { text, keyboard } = quiloxDashboardText(u.ll_username, stats, nextState, bal?.balance);
-
-  try {
-    await ctx.editMessageText(text, { parse_mode: 'Markdown', ...keyboard });
-  } catch {}
-
-  const stateMsg = nextState
-    ? `🟢 *Quilox Auto-Picker Activated!*\n\n` +
-      `The bot will automatically sweep the Quilox VIP floor every minute while Quilox is open (10:00 PM – 5:00 AM WAT) and deposit all money into your LagosLife wallet.`
-    : `🔴 *Quilox Auto-Picker Deactivated.*`;
-
-  await ctx.reply(stateMsg, { parse_mode: 'Markdown' });
-});
-
-bot.action('quilox_scoop_now', async (ctx) => {
-  const chatId = String(ctx.chat!.id);
-  if (!isAuthenticated(chatId)) {
-    await ctx.answerCbQuery('Session expired. Please /login.');
-    return;
-  }
-
-  const club = isQuiloxOpen();
-  if (!club.isOpen) {
-    await ctx.answerCbQuery('Quilox is CLOSED right now!', { show_alert: true });
-    await ctx.reply(
-      `🚪 *Quilox Nightclub is CLOSED right now!*\n\n` +
-      `🕒 *Operating Hours:* 10:00 PM – 5:00 AM West Africa Time (WAT)\n` +
-      `⏰ *Current Lagos Time:* ${club.timeStr}\n\n` +
-      `Money can only be picked from the VIP floor when the club is open.\n` +
-      `💡 _Tip: You can turn on *Auto-Picker* now so the bot automatically scoops when the doors open tonight!_`,
-      { parse_mode: 'Markdown' }
-    );
-    return;
-  }
-
-  // Prevent conflict if user has an active batch transfer
-  if (activeBatches.has(chatId)) {
-    await ctx.answerCbQuery('Batch transfer in progress!', { show_alert: true });
-    return ctx.reply('⚠️ You have a batch transfer running. Please wait for it to finish before scooping floor cash.');
-  }
-
-  await ctx.answerCbQuery('Scooping VIP floor…');
-  const scoopMsg = await ctx.reply('🪩 *Stepping into Quilox VIP floor & sweeping for dropped cash…*', { parse_mode: 'Markdown' });
-
-  const u = getUser(chatId)!;
-  const result = await pickQuiloxMoney(chatId);
-
-  if (result.success) {
-    recordQuiloxPick(chatId, u.ll_username, result.amountPicked, result.newBalance);
-
-    await safeEdit(chatId, scoopMsg.message_id,
-      `🎉 *Quilox Floor Cash Scooped!*\n` +
-      `━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `👤 *Player:* @${escMd(u.ll_username)}\n` +
-      `💵 *Amount Picked:* ${fmtFull(result.amountPicked)} _(${fmtShort(result.amountPicked)})_\n` +
-      `💰 *New Wallet Balance:* ${fmtFull(result.newBalance)} _(${fmtShort(result.newBalance)})_\n` +
-      `📍 *Location:* Quilox VIP Floor (clubEko)\n` +
-      `━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `✨ _Cash has been deposited directly into your LagosLife account!_`
-    );
-
-    // Channel announcement (NO Telegram ID/username for privacy!)
-    await notify(
-      `🪩 *QUILOX VIP FLOOR SCOOP!*\n` +
-      `━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `👤 *Player:* @${escMd(u.ll_username)}\n` +
-      `💵 *Amount Picked:* ${fmtFull(result.amountPicked)} _(${fmtShort(result.amountPicked)})_\n` +
-      `📍 *Venue:* Quilox Nightclub (VIP Floor)\n` +
-      `⚡ *Status:* Scooped & Deposited ✅\n` +
-      `━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `🤖 *LLBM Money Bot*`
-    );
-  } else {
-    await safeEdit(chatId, scoopMsg.message_id,
-      `⚠️ *Quilox Scoop Failed*\n\nReason: ${result.error || 'No active sprays found or connection timed out.'}\n\nPlease try again in a few moments.`
-    );
-  }
-});
 
 // ────────────────────────────────────────────────────────────────────────────
 // LOGIN flow (username → password → PIN setup)
@@ -1588,66 +1382,6 @@ bot.on(message('text'), async (ctx) => {
 bot.catch((err: any, ctx: any) => {
   console.error(`[Bot Error] ${ctx?.updateType}:`, err?.message || err);
 });
-
-// ────────────────────────────────────────────────────────────────────────────
-// Quilox Auto-Picker Background Daemon
-// Runs every 60s. When Quilox is open (10PM - 5AM WAT), loops through all users
-// with auto-picker enabled and scoops dropped floor cash.
-// ────────────────────────────────────────────────────────────────────────────
-
-let isAutoPickingActive = false;
-
-setInterval(async () => {
-  if (isAutoPickingActive) return; // Prevent overlapping runs
-  const club = isQuiloxOpen();
-  if (!club.isOpen) return; // Only run when Quilox is open
-
-  const autoUsers = getAllAutoPickerUsers();
-  if (!autoUsers || autoUsers.length === 0) return;
-
-  isAutoPickingActive = true;
-  try {
-    for (const user of autoUsers) {
-      // Don't interrupt users who are currently sending a transfer batch
-      if (activeBatches.has(user.chat_id)) continue;
-
-      try {
-        const res = await pickQuiloxMoney(user.chat_id);
-        if (res.success && res.amountPicked > 0) {
-          recordQuiloxPick(user.chat_id, user.ll_username, res.amountPicked, res.newBalance);
-
-          // Private DM to user
-          await bot.telegram.sendMessage(
-            user.chat_id,
-            `🪩 *Quilox Auto-Picker Alert*\n\n` +
-            `💰 Automatically scooped *${fmtFull(res.amountPicked)}* _(${fmtShort(res.amountPicked)})_ from the VIP floor!\n` +
-            `💵 New Balance: *${fmtFull(res.newBalance)}*`,
-            { parse_mode: 'Markdown' }
-          ).catch(() => {});
-
-          // Channel ticker broadcast (No Telegram ID/username!)
-          await notify(
-            `🪩 *QUILOX AUTO-PICK SCOOP!*\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-            `👤 *Player:* @${escMd(user.ll_username)}\n` +
-            `💵 *Amount Picked:* ${fmtFull(res.amountPicked)} _(${fmtShort(res.amountPicked)})_\n` +
-            `📍 *Venue:* Quilox Nightclub (VIP Floor)\n` +
-            `⚡ *Status:* Auto-Scooped & Deposited ✅\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-            `🤖 *LLBM Money Bot*`
-          );
-        }
-      } catch (err: any) {
-        console.warn(`[Quilox AutoPick for ${user.ll_username}]:`, err?.message || err);
-      }
-
-      // Small delay between users to avoid throttling
-      await delay(2000);
-    }
-  } finally {
-    isAutoPickingActive = false;
-  }
-}, 60000);
 
 // ────────────────────────────────────────────────────────────────────────────
 // Launch

@@ -127,79 +127,12 @@ export function updateUserId(chatId: string | number, llUserId: string, llName?:
 }
 
 /**
- * Toggle Quilox auto-picker status for a user.
- */
-export function setQuiloxAutoPick(chatId: string | number, enabled: boolean): void {
-  db.prepare(`
-    UPDATE bot_users
-    SET quilox_auto_pick = ?, updated_at = CURRENT_TIMESTAMP
-    WHERE chat_id = ?
-  `).run(enabled ? 1 : 0, String(chatId));
-}
-
-/**
- * Records a successful Quilox floor money pick in the database.
- */
-export function recordQuiloxPick(
-  chatId: string | number,
-  username: string,
-  amount: number,
-  balanceAfter?: number
-): void {
-  db.prepare(`
-    INSERT INTO quilox_picks (chat_id, ll_username, amount, balance_after, venue)
-    VALUES (?, ?, ?, ?, 'clubEko')
-  `).run(String(chatId), username, amount, balanceAfter || null);
-
-  db.prepare(`
-    UPDATE bot_users
-    SET quilox_total_picked = COALESCE(quilox_total_picked, 0) + ?,
-        updated_at = CURRENT_TIMESTAMP
-    WHERE chat_id = ?
-  `).run(amount, String(chatId));
-}
-
-/**
- * Retrieves stats for Quilox floor pickups for a specific user.
- */
-export function getQuiloxStats(chatId: string | number): { totalPicked: number; pickCount: number; lastPickAt?: string } {
-  const row = db.prepare(`
-    SELECT COALESCE(SUM(amount), 0) as totalPicked,
-           COUNT(*) as pickCount,
-           MAX(picked_at) as lastPickAt
-    FROM quilox_picks
-    WHERE chat_id = ?
-  `).get(String(chatId)) as any;
-
-  return {
-    totalPicked: Number(row?.totalPicked || 0),
-    pickCount: Number(row?.pickCount || 0),
-    lastPickAt: row?.lastPickAt || undefined,
-  };
-}
-
-/**
- * Returns all active users who have Quilox auto-picker turned ON.
- */
-export function getAllAutoPickerUsers(): Array<{ chat_id: string; ll_username: string }> {
-  try {
-    return db.prepare(`
-      SELECT chat_id, ll_username
-      FROM bot_users
-      WHERE is_authenticated = 1 AND quilox_auto_pick = 1 AND ll_session_cookie IS NOT NULL
-    `).all() as any[];
-  } catch {
-    return [];
-  }
-}
-
-/**
  * Clears the session for the given user (logout).
  */
 export function clearSession(chatId: string | number): void {
   db.prepare(`
     UPDATE bot_users
-    SET is_authenticated = 0, ll_session_cookie = NULL, quilox_auto_pick = 0, updated_at = CURRENT_TIMESTAMP
+    SET is_authenticated = 0, ll_session_cookie = NULL, updated_at = CURRENT_TIMESTAMP
     WHERE chat_id = ?
   `).run(String(chatId));
 }
