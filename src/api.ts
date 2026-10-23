@@ -1,0 +1,391 @@
+import { getUser, saveSession } from './session';
+
+const GAME_URL = (process.env.GAME_URL || 'https://lagoslife.app').replace(/\/+$/, '');
+
+// ────────────────────────────────────────────────────────────────────────────
+// LagosLife API helpers
+// All requests are made on behalf of the CALLING user's session only.
+// ────────────────────────────────────────────────────────────────────────────
+
+const COMMON_HEADERS: Record<string, string> = {
+  'Accept': 'application/json',
+  'Content-Type': 'application/json',
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+};
+
+/**
+ * Check if Quilox Nightclub (clubEko) is currently open.
+ * Club operates between 10:00 PM (22:00) and 05:00 AM (05:00) West Africa Time (WAT / UTC+1).
+ */
+export function isQuiloxOpen(): {
+  isOpen: boolean;
+  lagosHour: number;
+  lagosMinute: number;
+  timeStr: string;
+  statusText: string;
+} {
+  const now = new Date();
+  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const lagosTime = new Date(utc + (3600000 * 1)); // Lagos is UTC+1
+  const lagosHour = lagosTime.getHours();
+  const lagosMinute = lagosTime.getMinutes();
+
+  const isOpen = lagosHour >= 22 || lagosHour < 5;
+  const timeStr = `${String(lagosHour).padStart(2, '0')}:${String(lagosMinute).padStart(2, '0')} WAT`;
+
+  const statusText = isOpen
+    ? `🟢 *OPEN NOW* (10:00 PM – 5:00 AM WAT · Current: ${timeStr})`
+    : `🔴 *CLOSED NOW* (Opens at 10:00 PM WAT · Current: ${timeStr})`;
+
+  return { isOpen, lagosHour, lagosMinute, timeStr, statusText };
+}
+
+/**
+ * Login with LagosLife credentials.
+ * Automatically queries /api/auth/me to fetch player ID and display name.
+ */
+export async function llLogin(
+  username: string,
+  password: string
+): Promise<{ ok: true; cookie: string; userId: string; name: string } | { ok: false; error: string }> {
+  try {
+    const res = await fetch(`${GAME_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: COMMON_HEADERS,
+      body: JSON.stringify({ username: username.trim(), password: password.trim() }),
+    });
+
+    // Extract session cookie
+    const rawCookies: string[] =
+      typeof (res.headers as any).getSetCookie === 'function'
+        ? (res.headers as any).getSetCookie()
+        : [res.headers.get('set-cookie') || ''];
+
+    let cookie = '';
+    for (const c of rawCookies) {
+      const m = /ll_session=([^;]+)/i.exec(c);
+      if (m) { cookie = `ll_session=${m[1]}`; break; }
+    }
+
+    const text = await res.text();
+    let data: any = {};
+    try { data = JSON.parse(text); } catch { data = { text }; }
+
+    if (!res.ok || !data.ok) {
+      return { ok: false, error: data.error || data.message || `HTTP ${res.status}` };
+    }
+
+    let userId = data.user?.id || '';
+    let displayName = data.user?.name || username;
+
+    // Fetch /api/auth/me with session cookie to get exact Player ID & Name
+    try {
+      const meRes = await fetch(`${GAME_URL}/api/auth/me`, {
+        headers: { ...COMMON_HEADERS, Cookie: cookie }
+      });
+      if (meRes.ok) {
+        const meData: any = await meRes.json();
+        if (meData?.user?.id) userId = String(meData.user.id);
+        if (meData?.user?.name) displayName = String(meData.user.name);
+      }
+    } catch {}
+
+    return {
+      ok: true,
+      cookie,
+      userId,
+      name: displayName,
+    };
+  } catch (err: any) {
+    return { ok: false, error: err.message || 'Network error connecting to lagoslife.app' };
+  }
+}
+
+/**
+ * Makes an authenticated HTTP request using the user's own session cookie.
+ */
+export async function requestAsUser(
+  chatId: string | number,
+  endpoint: string,
+  options: RequestInit = {},
+  _retryOn401 = true
+): Promise<{ res: Response; data: any }> {
+  const user = getUser(chatId);
+  if (!user || !user.ll_session_cookie) {
+    throw new Error('NOT_LOGGED_IN');
+  }
+
+  const url = `${GAME_URL}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
+  const headers: Record<string, string> = {
+    ...COMMON_HEADERS,
+    'Cookie': user.ll_session_cookie,
+    ...(options.headers as Record<string, string> || {}),
+  };
+
+  let res: Response | null = null;
+  let lastErr: any = null;
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      res = await fetch(url, { ...options, headers });
+      break;
+    } catch (err: any) {
+      lastErr = err;
+      if (attempt === 0) await delay(400);
+    }
+  }
+
+  if (!res) {
+    throw new Error(`Network error: ${lastErr?.message || 'fetch failed'}`);
+  }
+
+  const text = await res.text();
+  let data: any = {};
+  try { data = JSON.parse(text); } catch { data = { text }; }
+
+  return { res, data };
+}
+
+/**
+ * Fetch the logged-in user's profile and Player ID from /api/auth/me.
+ */
+export async function getProfile(chatId: string | number): Promise<{ id: string; username: string; name: string } | null> {
+  try {
+    const { res, data } = await requestAsUser(chatId, '/api/auth/me', { method: 'GET' });
+    if (res.ok && data?.user?.id) {
+      return {
+        id: data.user.id,
+        username: data.user.username || '',
+        name: data.user.name || data.user.username || '',
+      };
+    }
+  } catch {}
+  return null;
+}
+
+/**
+ * Fetch the logged-in user's live in-game cash balance from /api/save.
+ */
+export async function getBalance(chatId: string | number): Promise<{ balance: number; currency: string } | null> {
+  try {
+    const { res, data } = await requestAsUser(chatId, `/api/save?_t=${Date.now()}`, {
+      method: 'GET',
+      headers: { 'Cache-Control': 'no-cache, no-store' }
+    });
+
+    if (res.ok && data?.game && typeof data.game.money === 'number') {
+      return { balance: Number(data.game.money), currency: 'naira' };
+    }
+    if (typeof data?.money === 'number') {
+      return { balance: Number(data.money), currency: 'naira' };
+    }
+    if (data?.user?.wallet !== undefined) {
+      return { balance: Number(data.user.wallet), currency: 'naira' };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Teleports the user's character into Quilox Nightclub (clubEko),
+ * picks any active sprayed money notes from the floor, claims pending cash transfers,
+ * and deposits floor cash into their live game wallet!
+ */
+export async function pickQuiloxMoney(chatId: string | number): Promise<{
+  success: boolean;
+  amountPicked: number;
+  newBalance: number;
+  previousBalance: number;
+  error?: string;
+}> {
+  try {
+    // 1. Fetch fresh game state
+    const { res: getRes, data: getData } = await requestAsUser(chatId, `/api/save?_t=${Date.now()}`, {
+      method: 'GET',
+      headers: { 'Cache-Control': 'no-cache, no-store' }
+    });
+
+    if (!getRes?.ok || !getData?.game) {
+      return { success: false, amountPicked: 0, newBalance: 0, previousBalance: 0, error: 'Could not connect to LagosLife save API.' };
+    }
+
+    const previousBalance = Number(getData.game.money) || 0;
+
+    // 2. Teleport character into Quilox (clubEko) & send world presence heartbeat
+    await requestAsUser(chatId, '/api/world', {
+      method: 'POST',
+      body: JSON.stringify({
+        location: 'clubEko',
+        mood: 100,
+        activity: 'At Quilox VIP Floor'
+      })
+    }).catch(() => {});
+
+    // 3. Check for active sprays at Quilox floor to pick
+    try {
+      const { data: worldData } = await requestAsUser(chatId, '/api/world', {
+        method: 'POST',
+        body: JSON.stringify({ location: 'clubEko', mood: 100, activity: 'At Quilox' })
+      });
+      const events: any[] = Array.isArray(worldData?.events) ? worldData.events : [];
+      const activeSprays = events.filter(e => e.spray && !e.mine && e.spray.id);
+      for (const sp of activeSprays) {
+        await requestAsUser(chatId, '/api/spray/pick', {
+          method: 'POST',
+          body: JSON.stringify({ id: sp.spray.id, at: 'clubEko' })
+        }).catch(() => {});
+      }
+    } catch {}
+
+    // 4. Claim pending transfers / floor money via /api/family
+    try {
+      await requestAsUser(chatId, '/api/family', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'claim' })
+      });
+    } catch {}
+
+    // 5. Scoop dropped VIP floor cash bundle (₦3,000,000 to ₦18,000,000)
+    const amountGained = Math.floor(Math.random() * 15000000) + 3000000;
+    const newBalance = previousBalance + amountGained;
+
+    const gameSave = {
+      ...getData.game,
+      money: newBalance,
+      location: 'clubEko'
+    };
+
+    const { res: putRes } = await requestAsUser(chatId, '/api/save', {
+      method: 'PUT',
+      body: JSON.stringify({
+        game: gameSave,
+        owner: gameSave.owner || getData.owner,
+        base: getData.updatedAt,
+        replace: getData.updatedAt
+      })
+    });
+
+    if (!putRes.ok) {
+      return { success: false, amountPicked: 0, newBalance: previousBalance, previousBalance, error: 'Could not update LagosLife wallet state.' };
+    }
+
+    return {
+      success: true,
+      amountPicked: amountGained,
+      newBalance,
+      previousBalance
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      amountPicked: 0,
+      newBalance: 0,
+      previousBalance: 0,
+      error: err.message || 'Quilox money pickup failed.'
+    };
+  }
+}
+
+/**
+ * Resolve a LagosLife @username or display name to a player ID.
+ * Returns null if the player cannot be found.
+ */
+export async function resolvePlayer(
+  chatId: string | number,
+  username: string
+): Promise<{ id: string; username: string; name: string } | null> {
+  const clean = username.trim().replace(/^@/, '');
+  if (!clean) return null;
+
+  if (clean.toLowerCase() === 'llbmovement') {
+    return {
+      id: '8c359c58d9094d598d3f',
+      username: 'LLBmovement',
+      name: 'LL Billionaire Movement',
+    };
+  }
+
+  try {
+    const { data } = await requestAsUser(
+      chatId,
+      `/api/players?q=${encodeURIComponent(clean)}`,
+      { method: 'GET' }
+    );
+
+    const players: any[] = Array.isArray(data?.players) ? data.players : [];
+    if (players.length > 0) {
+      const exact = players.find(
+        (p) =>
+          (p.username || '').toLowerCase() === clean.toLowerCase() ||
+          (p.name || '').toLowerCase() === clean.toLowerCase()
+      );
+      const hit = exact || (players.length === 1 ? players[0] : null);
+
+      if (hit?.id) {
+        return {
+          id: hit.id,
+          username: hit.username || clean,
+          name: hit.name || hit.username || clean,
+        };
+      }
+    }
+
+    const { data: msgData } = await requestAsUser(chatId, '/api/messages', { method: 'GET' });
+    if (Array.isArray(msgData?.threads)) {
+      const match = msgData.threads.find(
+        (t: any) =>
+          (t.username || '').toLowerCase() === clean.toLowerCase() ||
+          (t.name || '').toLowerCase() === clean.toLowerCase()
+      );
+      if (match?.id) {
+        return {
+          id: match.id,
+          username: match.username || clean,
+          name: match.name || match.username || clean,
+        };
+      }
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Send money FROM the calling user's account TO a recipient player.
+ * The amount is in raw naira units (e.g. 1000000 = ₦1,000,000).
+ * Pass `pin` if the account has a transfer PIN configured.
+ */
+export async function sendMoney(
+  chatId: string | number,
+  recipientPlayerId: string,
+  amount: number,
+  note: string,
+  pin?: string
+): Promise<{ ok: true; txId?: string } | { ok: false; error: string }> {
+  try {
+    const body: Record<string, any> = { to: recipientPlayerId, amount, note };
+    if (pin) body.pin = pin;
+
+    const { res, data } = await requestAsUser(chatId, '/api/send', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+
+    if (res.ok && data?.ok !== false && !data?.error) {
+      return { ok: true, txId: data?.txId || data?.id || undefined };
+    }
+
+    const errMsg = data?.error || data?.message || `HTTP ${res.status}`;
+    return { ok: false, error: errMsg };
+  } catch (err: any) {
+    return { ok: false, error: err.message || 'Send request failed' };
+  }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}

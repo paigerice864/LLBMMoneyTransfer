@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment (contains secrets!)
+.env
+
+# Database (runtime data)
+data/
+
+# Logs
+*.log
+npm-debug.log*
