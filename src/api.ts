@@ -127,11 +127,14 @@ export async function requestAsUser(
 
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      res = await fetch(url, { ...options, headers });
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
+      res = await fetch(url, { ...options, headers, signal: controller.signal });
+      clearTimeout(timer);
       break;
     } catch (err: any) {
       lastErr = err;
-      if (attempt === 0) await delay(400);
+      if (attempt === 0) await delay(300);
     }
   }
 
@@ -288,6 +291,9 @@ export async function pickQuiloxMoney(chatId: string | number): Promise<{
   }
 }
 
+// In-memory cache for resolved player profiles to prevent redundant slow API requests
+const playerCache = new Map<string, { id: string; username: string; name: string }>();
+
 /**
  * Resolve a LagosLife @username or display name to a player ID.
  * Returns null if the player cannot be found.
@@ -299,12 +305,19 @@ export async function resolvePlayer(
   const clean = username.trim().replace(/^@/, '');
   if (!clean) return null;
 
-  if (clean.toLowerCase() === 'llbmovement') {
-    return {
+  const key = clean.toLowerCase();
+  if (playerCache.has(key)) {
+    return playerCache.get(key)!;
+  }
+
+  if (key === 'llbmovement') {
+    const res = {
       id: '8c359c58d9094d598d3f',
       username: 'LLBmovement',
       name: 'LL Billionaire Movement',
     };
+    playerCache.set(key, res);
+    return res;
   }
 
   try {
@@ -318,17 +331,20 @@ export async function resolvePlayer(
     if (players.length > 0) {
       const exact = players.find(
         (p) =>
-          (p.username || '').toLowerCase() === clean.toLowerCase() ||
-          (p.name || '').toLowerCase() === clean.toLowerCase()
+          (p.username || '').toLowerCase() === key ||
+          (p.name || '').toLowerCase() === key
       );
       const hit = exact || (players.length === 1 ? players[0] : null);
 
       if (hit?.id) {
-        return {
+        const res = {
           id: hit.id,
           username: hit.username || clean,
           name: hit.name || hit.username || clean,
         };
+        playerCache.set(key, res);
+        if (hit.username) playerCache.set(hit.username.toLowerCase(), res);
+        return res;
       }
     }
 
@@ -336,15 +352,18 @@ export async function resolvePlayer(
     if (Array.isArray(msgData?.threads)) {
       const match = msgData.threads.find(
         (t: any) =>
-          (t.username || '').toLowerCase() === clean.toLowerCase() ||
-          (t.name || '').toLowerCase() === clean.toLowerCase()
+          (t.username || '').toLowerCase() === key ||
+          (t.name || '').toLowerCase() === key
       );
       if (match?.id) {
-        return {
+        const res = {
           id: match.id,
           username: match.username || clean,
           name: match.name || match.username || clean,
         };
+        playerCache.set(key, res);
+        if (match.username) playerCache.set(match.username.toLowerCase(), res);
+        return res;
       }
     }
 

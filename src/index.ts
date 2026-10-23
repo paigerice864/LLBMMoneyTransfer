@@ -1460,13 +1460,28 @@ bot.on(message('text'), async (ctx) => {
         const resolveMsg = await ctx.reply(`🔍 Resolving ${parsed.length} username(s)…`, Markup.removeKeyboard());
         const resolved: ParsedRecipient[] = [];
         const failedResolve: string[] = [];
+        let completed = 0;
+        let lastEditTime = 0;
 
-        for (let i = 0; i < parsed.length; i++) {
-          const r = parsed[i];
-          await safeEdit(chatId, resolveMsg.message_id, `🔍 Resolving ${i + 1}/${parsed.length}: @${r.username}…`);
-          const player = await resolvePlayer(chatId, r.username);
-          if (player) resolved.push({ username: player.username, amount: r.amount, playerId: player.id });
-          else failedResolve.push(`❌ @${r.username} — not found`);
+        const results = await Promise.all(
+          parsed.map(async (r) => {
+            const player = await resolvePlayer(chatId, r.username);
+            completed++;
+            const now = Date.now();
+            if (now - lastEditTime > 1500 || completed === parsed.length) {
+              lastEditTime = now;
+              await safeEdit(chatId, resolveMsg.message_id, `🔍 Resolving players (${completed}/${parsed.length})…`);
+            }
+            return { r, player };
+          })
+        );
+
+        for (const item of results) {
+          if (item.player) {
+            resolved.push({ username: item.player.username, amount: item.r.amount, playerId: item.player.id });
+          } else {
+            failedResolve.push(`❌ @${item.r.username} — not found`);
+          }
         }
 
         if (!resolved.length) {
