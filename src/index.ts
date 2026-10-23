@@ -346,6 +346,7 @@ async function runBatch(
 ): Promise<void> {
   const pin = userPins.get(chatId);
   const cancelBtn = Markup.inlineKeyboard([[Markup.button.callback('🚫 Cancel Batch', 'cancel_batch')]]);
+  const failedList: Array<{ username: string; amount: number; reason: string }> = [];
 
   for (let i = 0; i < chunks.length; i++) {
     const ref = activeBatches.get(chatId);
@@ -374,6 +375,11 @@ async function runBatch(
       recordTransfer({ chat_id: chatId, sender_ll_username: state.senderUsername, recipient_username: chunk.recipientUsername, recipient_player_id: chunk.recipientPlayerId, amount: chunk.amount, note: chunk.note, status: 'success', tx_response: result.txId });
     } else {
       state.failedChunks++;
+      failedList.push({
+        username: chunk.recipientUsername,
+        amount: chunk.amount,
+        reason: result.error || 'Network error / API rejected',
+      });
       recordBatchChunk({ jobId, chunkIndex: i, recipientUsername: chunk.recipientUsername, recipientPlayerId: chunk.recipientPlayerId, amount: chunk.amount, note: chunk.note, status: 'failed', errorReason: result.error });
       recordTransfer({ chat_id: chatId, sender_ll_username: state.senderUsername, recipient_username: chunk.recipientUsername, recipient_player_id: chunk.recipientPlayerId, amount: chunk.amount, note: chunk.note, status: 'failed', error_reason: result.error });
     }
@@ -410,6 +416,15 @@ async function runBatch(
 
   const isLLBM = chunks[0]?.recipientUsername?.toLowerCase() === LLBM_MOVEMENT_USERNAME.toLowerCase();
 
+  let failedSection = '';
+  if (failedList.length > 0) {
+    failedSection =
+      `\n\n❌ *Failed Transfers (${failedList.length}):*\n` +
+      failedList.map((f, idx) =>
+        `${idx + 1}\\. @${escMd(f.username)} — *${fmtShort(f.amount)}*\n   ⚠️ _Reason: ${escMd(f.reason)}_`
+      ).join('\n');
+  }
+
   const summary =
     `${state.failedChunks === 0 ? '✅' : '⚠️'} *Batch Complete!*\n` +
     `━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
@@ -417,9 +432,15 @@ async function runBatch(
     (isLLBM ? `🎯 *Beneficiary:* LL Billionaire Movement (@${LLBM_MOVEMENT_USERNAME})\n` : '') +
     `📦 *Chunks:* ${state.totalChunks}\n` +
     `💵 *Total Sent:* ${fmtFull(state.sentAmount)}\n` +
-    `✔️ OK: ${state.successChunks}   ❌ Failed: ${state.failedChunks}`;
+    `✔️ OK: ${state.successChunks}   ❌ Failed: ${state.failedChunks}` +
+    failedSection;
 
   await safeSend(chatId, summary, mainMenu(true));
+
+  let channelFailedSection = '';
+  if (failedList.length > 0) {
+    channelFailedSection = '\n⚠️ *Failed:* ' + failedList.map(f => `@${escMd(f.username)} (${fmtShort(f.amount)})`).join(', ');
+  }
 
   if (isLLBM) {
     await notify(
@@ -440,7 +461,8 @@ async function runBatch(
       `👤 *Sender:* @${escMd(state.senderUsername)}\n` +
       `📦 *Total Chunks:* ${state.totalChunks}\n` +
       `💵 *Total Sent:* ${fmtFull(state.sentAmount)} _(${fmtShort(state.sentAmount)})_\n` +
-      `✔️ *Successful:* ${state.successChunks}   ❌ *Failed:* ${state.failedChunks}\n` +
+      `✔️ *Successful:* ${state.successChunks}   ❌ *Failed:* ${state.failedChunks}` +
+      channelFailedSection + `\n` +
       `⚡ *Status:* ${state.failedChunks === 0 ? 'All Delivered ✅' : 'Completed with issues ⚠️'}\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
       `🤖 *LLBM Money Bot*`

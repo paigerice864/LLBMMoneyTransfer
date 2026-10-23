@@ -127,14 +127,15 @@ export async function requestAsUser(
 
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
+      const timeoutMs = endpoint.includes('/send') ? 35000 : 10000;
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 8000);
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
       res = await fetch(url, { ...options, headers, signal: controller.signal });
       clearTimeout(timer);
       break;
     } catch (err: any) {
       lastErr = err;
-      if (attempt === 0) await delay(300);
+      if (attempt === 0) await delay(500);
     }
   }
 
