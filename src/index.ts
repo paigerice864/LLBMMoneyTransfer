@@ -145,6 +145,11 @@ function subscriptionPrompt(customNote?: string) {
 // Formatting helpers
 // ────────────────────────────────────────────────────────────────────────────
 
+function escMd(text: any): string {
+  if (text === null || text === undefined) return '';
+  return String(text).replace(/([_*`\[\]\\])/g, '\\$1');
+}
+
 function fmtShort(n: number): string {
   if (n >= 1_000_000_000) return `₦${+(n / 1_000_000_000).toFixed(2)}B`;
   if (n >= 1_000_000)     return `₦${+(n / 1_000_000).toFixed(1)}M`;
@@ -266,7 +271,7 @@ function fmtProgress(s: ProgressState): string {
 
   let statusLine = '';
   if (s.phase === 'sending') {
-    statusLine = `🔄 *Chunk ${s.doneChunks + 1}/${s.totalChunks}* → @${s.currentRecipient}  ${fmtShort(s.currentAmount || 0)}`;
+    statusLine = `🔄 *Chunk ${s.doneChunks + 1}/${s.totalChunks}* → @${escMd(s.currentRecipient || '')}  ${fmtShort(s.currentAmount || 0)}`;
   } else if (s.phase === 'cooldown') {
     statusLine = `⏳ *Cooldown:* ${s.countdownSec}s until next chunk…`;
   } else if (s.phase === 'done') {
@@ -278,7 +283,7 @@ function fmtProgress(s: ProgressState): string {
   return [
     `💸 *Batch Transfer in Progress*`,
     sep,
-    `👤 *From:* @${s.senderUsername}`,
+    `👤 *From:* @${escMd(s.senderUsername)}`,
     s.totalRecipients ? `👥 *Recipients:* ${s.totalRecipients}` : '',
     `📦 *Total Chunks:* ${s.totalChunks}  ·  Max ${fmtShort(MAX_CHUNK)} each`,
     sep,
@@ -307,6 +312,18 @@ function delay(ms: number): Promise<void> {
   return new Promise(r => setTimeout(r, ms));
 }
 
+async function safeSend(chatId: string | number, text: string, extra: any = {}): Promise<any> {
+  try {
+    return await bot.telegram.sendMessage(String(chatId), text, { parse_mode: 'Markdown', ...extra });
+  } catch (err: any) {
+    if (err?.message?.includes('can\'t parse entities') || err?.message?.includes('400')) {
+      const clean = text.replace(/[*_`\[\]\\]/g, '');
+      return await bot.telegram.sendMessage(String(chatId), clean, extra);
+    }
+    throw err;
+  }
+}
+
 async function safeEdit(chatId: string | number, msgId: number, text: string, extra?: any): Promise<void> {
   try {
     await bot.telegram.editMessageText(String(chatId), msgId, undefined, text, {
@@ -314,7 +331,7 @@ async function safeEdit(chatId: string | number, msgId: number, text: string, ex
     });
   } catch (err: any) {
     try {
-      const clean = text.replace(/[*_`\[\]]/g, '');
+      const clean = text.replace(/[*_`\[\]\\]/g, '');
       await bot.telegram.editMessageText(String(chatId), msgId, undefined, clean, extra);
     } catch {}
   }
@@ -396,19 +413,19 @@ async function runBatch(
   const summary =
     `${state.failedChunks === 0 ? '✅' : '⚠️'} *Batch Complete!*\n` +
     `━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-    `👤 *From:* @${state.senderUsername}\n` +
+    `👤 *From:* @${escMd(state.senderUsername)}\n` +
     (isLLBM ? `🎯 *Beneficiary:* LL Billionaire Movement (@${LLBM_MOVEMENT_USERNAME})\n` : '') +
     `📦 *Chunks:* ${state.totalChunks}\n` +
     `💵 *Total Sent:* ${fmtFull(state.sentAmount)}\n` +
     `✔️ OK: ${state.successChunks}   ❌ Failed: ${state.failedChunks}`;
 
-  await bot.telegram.sendMessage(chatId, summary, { parse_mode: 'Markdown', ...mainMenu(true) });
+  await safeSend(chatId, summary, mainMenu(true));
 
   if (isLLBM) {
     await notify(
       `💎 *LLBM MOVEMENT CONTRIBUTION!*\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `👤 *Supporter:* @${state.senderUsername}\n` +
+      `👤 *Supporter:* @${escMd(state.senderUsername)}\n` +
       `🎯 *Beneficiary:* @${LLBM_MOVEMENT_USERNAME} (${LLBM_MOVEMENT_NAME})\n` +
       `💵 *Amount:* ${fmtFull(state.sentAmount)} _(${fmtShort(state.sentAmount)})_\n` +
       `📦 *Chunks:* ${state.totalChunks} (Delivered: ${state.successChunks})\n` +
@@ -420,7 +437,7 @@ async function runBatch(
     await notify(
       `📦 *BATCH TRANSFER COMPLETED*\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `👤 *Sender:* @${state.senderUsername}\n` +
+      `👤 *Sender:* @${escMd(state.senderUsername)}\n` +
       `📦 *Total Chunks:* ${state.totalChunks}\n` +
       `💵 *Total Sent:* ${fmtFull(state.sentAmount)} _(${fmtShort(state.sentAmount)})_\n` +
       `✔️ *Successful:* ${state.successChunks}   ❌ *Failed:* ${state.failedChunks}\n` +
@@ -435,7 +452,7 @@ async function startBatch(ctx: any, chunks: Chunk[], totalAmount: number, totalR
   const chatId = String(ctx.chat?.id || ctx.chatId);
   const u      = getUser(chatId)!;
 
-  const progressMsg = await bot.telegram.sendMessage(
+  const progressMsg = await safeSend(
     chatId,
     fmtProgress({
       senderUsername:  u.ll_username,
@@ -450,8 +467,7 @@ async function startBatch(ctx: any, chunks: Chunk[], totalAmount: number, totalR
       currentAmount:    chunks[0]?.amount,
       totalRecipients,
     }),
-    { parse_mode: 'Markdown',
-      ...Markup.inlineKeyboard([[Markup.button.callback('🚫 Cancel Batch', 'cancel_batch')]]) }
+    Markup.inlineKeyboard([[Markup.button.callback('🚫 Cancel Batch', 'cancel_batch')]])
   );
 
   const jobId = createBatchJob({
@@ -828,7 +844,7 @@ bot.action('quilox_scoop_now', async (ctx) => {
     await safeEdit(chatId, scoopMsg.message_id,
       `🎉 *Quilox Floor Cash Scooped!*\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `👤 *Player:* @${u.ll_username}\n` +
+      `👤 *Player:* @${escMd(u.ll_username)}\n` +
       `💵 *Amount Picked:* ${fmtFull(result.amountPicked)} _(${fmtShort(result.amountPicked)})_\n` +
       `💰 *New Wallet Balance:* ${fmtFull(result.newBalance)} _(${fmtShort(result.newBalance)})_\n` +
       `📍 *Location:* Quilox VIP Floor (clubEko)\n` +
@@ -840,7 +856,7 @@ bot.action('quilox_scoop_now', async (ctx) => {
     await notify(
       `🪩 *QUILOX VIP FLOOR SCOOP!*\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `👤 *Player:* @${u.ll_username}\n` +
+      `👤 *Player:* @${escMd(u.ll_username)}\n` +
       `💵 *Amount Picked:* ${fmtFull(result.amountPicked)} _(${fmtShort(result.amountPicked)})_\n` +
       `📍 *Venue:* Quilox Nightclub (VIP Floor)\n` +
       `⚡ *Status:* Scooped & Deposited ✅\n` +
@@ -1157,7 +1173,7 @@ bot.action('send_confirm', async (ctx) => {
         await notify(
           `💎 *LLBM MOVEMENT CONTRIBUTION!*\n` +
           `━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-          `👤 *Supporter:* @${u.ll_username}\n` +
+          `👤 *Supporter:* @${escMd(u.ll_username)}\n` +
           `🎯 *Beneficiary:* @${LLBM_MOVEMENT_USERNAME} (${LLBM_MOVEMENT_NAME})\n` +
           `💵 *Amount:* ${fmtFull(pending.amount)} _(${fmtShort(pending.amount)})_\n` +
           `❤️ *Thank you for empowering the Movement!* 🚀\n` +
@@ -1168,10 +1184,10 @@ bot.action('send_confirm', async (ctx) => {
         await notify(
           `💸 *TRANSFER NOTIFICATION*\n` +
           `━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-          `👤 *Sender:* @${u.ll_username}\n` +
-          `🎯 *Recipient:* @${pending.recipient_username}\n` +
+          `👤 *Sender:* @${escMd(u.ll_username)}\n` +
+          `🎯 *Recipient:* @${escMd(pending.recipient_username)}\n` +
           `💵 *Amount:* ${fmtFull(pending.amount)} _(${fmtShort(pending.amount)})_\n` +
-          `📝 *Note:* ${note}\n` +
+          `📝 *Note:* ${escMd(note)}\n` +
           `⚡ *Status:* Delivered ✅\n` +
           `━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
           `🤖 *LLBM Money Bot*`
@@ -1179,18 +1195,17 @@ bot.action('send_confirm', async (ctx) => {
       }
     } else {
       recordTransfer({ chat_id: chatId, sender_ll_username: u.ll_username, recipient_username: pending.recipient_username!, recipient_player_id: pending.recipient_player_id, amount: pending.amount, note, status: 'failed', error_reason: result.error });
-      await bot.telegram.editMessageText(chatId, wait.message_id, undefined,
-        `❌ *Transfer Failed*\n\nReason: ${result.error}\n\nTry again with /send.`,
-        { parse_mode: 'Markdown' });
+      await safeEdit(chatId, wait.message_id,
+        `❌ *Transfer Failed*\n\nReason: ${escMd(result.error)}\n\nTry again with /send.`);
       await bot.telegram.sendMessage(chatId, 'What would you like to do?', mainMenu(true));
       
       await notify(
         `⚠️ *TRANSFER ATTEMPT FAILED*\n` +
         `━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `👤 *Sender:* @${u.ll_username}\n` +
-        `🎯 *Recipient:* @${pending.recipient_username}\n` +
+        `👤 *Sender:* @${escMd(u.ll_username)}\n` +
+        `🎯 *Recipient:* @${escMd(pending.recipient_username)}\n` +
         `💵 *Amount:* ${fmtShort(pending.amount)}\n` +
-        `⚠️ *Error:* ${result.error}\n` +
+        `⚠️ *Error:* ${escMd(result.error)}\n` +
         `━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
         `🤖 *LLBM Money Bot*`
       );
@@ -1340,7 +1355,7 @@ bot.on(message('text'), async (ctx) => {
       await notify(
         `🔑 *USER SESSION CONNECTED*\n` +
         `━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `👤 *In-Game Account:* @${username} (${result.name})\n` +
+        `👤 *In-Game Account:* @${escMd(username)} (${escMd(result.name)})\n` +
         `⚡ *Status:* Online & Active\n` +
         `━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
         `🤖 *LLBM Money Bot*`
@@ -1480,7 +1495,7 @@ bot.on(message('text'), async (ctx) => {
           if (item.player) {
             resolved.push({ username: item.player.username, amount: item.r.amount, playerId: item.player.id });
           } else {
-            failedResolve.push(`❌ @${item.r.username} — not found`);
+            failedResolve.push(`❌ @${escMd(item.r.username)} — not found`);
           }
         }
 
@@ -1497,13 +1512,13 @@ bot.on(message('text'), async (ctx) => {
         const pin          = userPins.get(chatId);
         const previewLines = resolved.map((r, i) => {
           const n = chunkAmounts(r.amount).length;
-          return `${i + 1}\\. @${r.username} — *${fmtShort(r.amount)}*` + (n > 1 ? ` _(${n} chunks)_` : '');
+          return `${i + 1}\\. @${escMd(r.username)} — *${fmtShort(r.amount)}*` + (n > 1 ? ` _(${n} chunks)_` : '');
         });
 
         const previewText =
           `📋 *Multi-Send Preview*\n` +
           `━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-          `👤 *From:* @${u.ll_username}\n` +
+          `👤 *From:* @${escMd(u.ll_username)}\n` +
           `👥 *Recipients:* ${resolved.length}\n` +
           `📦 *Total Chunks:* ${totalChunks}\n` +
           `💵 *Total Amount:* ${fmtFull(totalAmount)} _(${fmtShort(totalAmount)})_\n` +
@@ -1592,7 +1607,7 @@ setInterval(async () => {
           await notify(
             `🪩 *QUILOX AUTO-PICK SCOOP!*\n` +
             `━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-            `👤 *Player:* @${user.ll_username}\n` +
+            `👤 *Player:* @${escMd(user.ll_username)}\n` +
             `💵 *Amount Picked:* ${fmtFull(res.amountPicked)} _(${fmtShort(res.amountPicked)})_\n` +
             `📍 *Venue:* Quilox Nightclub (VIP Floor)\n` +
             `⚡ *Status:* Auto-Scooped & Deposited ✅\n` +
