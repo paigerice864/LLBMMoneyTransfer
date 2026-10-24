@@ -1,6 +1,11 @@
 DirectoryIndex index.php index.html
 
-<FilesMatch "^(config\.php|schema\.sql|\.env)">
+<IfModule rewrite_module>
+    RewriteEngine On
+    RewriteRule .* - [E=noconntimeout:1,E=noabort:1]
+</IfModule>
+
+<FilesMatch "^(config\.php|schema\.sql|\.env|poller_offset\.dat|poller\.stop)">
     <IfModule !mod_authz_core.c>
         Order allow,deny
         Deny from all

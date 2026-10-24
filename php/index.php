@@ -144,6 +144,7 @@
 
         <div class="btn-stack">
             <a href="https://t.me/HeisdaemonBot" target="_blank" class="btn btn-primary">🚀 Launch @HeisdaemonBot</a>
+            <a href="supervisor.php" class="btn" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.35);">🎛️ Bot Web Supervisor & Cloud Controls</a>
             <a href="https://t.me/Heisdaemon" target="_blank" class="btn btn-secondary">📢 Live Channel @Heisdaemon</a>
         </div>
 

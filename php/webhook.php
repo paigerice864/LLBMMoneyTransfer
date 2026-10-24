@@ -4,18 +4,7 @@ require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/api.php';
 require_once __DIR__ . '/bot.php';
 
-$input = file_get_contents('php://input');
-if (empty($input)) {
-    $input = file_get_contents('php://stdin');
-}
-$update = json_decode($input, true);
 
-if (!$update) {
-    echo "OK - HeisDaemon Bot Webhook Ready";
-    exit;
-}
-
-$db = getDb();
 
 // ────────────────────────────────────────────────────────────────────────────
 // Anti-Distribution Security Gate
@@ -191,13 +180,28 @@ function renderQuiloxMenu(string $chatId, ?int $msgId = null): void {
 // ────────────────────────────────────────────────────────────────────────────
 function startBatchWorker(string $jobId): void {
     $script = __DIR__ . '/worker.php';
-    if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-        pclose(popen("start /B php \"$script\" $jobId", "r"));
+    if (function_exists('exec')) {
+        if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+            @pclose(popen("start /B php \"$script\" $jobId", "r"));
+        } else {
+            @exec("php \"$script\" $jobId > /dev/null 2>&1 &");
+        }
     } else {
-        exec("php \"$script\" $jobId > /dev/null 2>&1 &");
+        $url = 'https://lagoslife.hostedbyfps.com/worker.php?job_id=' . urlencode($jobId);
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 1);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        @curl_exec($ch);
+        @curl_close($ch);
     }
 }
 
+
+function handleTelegramUpdate(array $update): void {
+    $db = getDb();
+    try {
 // ────────────────────────────────────────────────────────────────────────────
 // Handle Callback Queries
 // ────────────────────────────────────────────────────────────────────────────
@@ -216,7 +220,7 @@ if (isset($update['callback_query'])) {
     if (strpos($data, 'adm_approve_') === 0) {
         if ((string)$userId !== (string)MASTER_ADMIN_ID) {
             safeEdit($chatId, $msgId, "🚫 Unauthorized: Master Admin only.");
-            exit;
+            return;
         }
         $targetId = substr($data, strlen('adm_approve_'));
         $db->prepare("UPDATE authorized_users SET status = 'approved', approved_by = ?, approved_at = NOW() WHERE chat_id = ?")
@@ -232,13 +236,13 @@ if (isset($update['callback_query'])) {
             "👇 Tap *Login* below to connect your LagosLife account and get started:",
             mainMenu(false)
         );
-        exit;
+        return;
     }
 
     if (strpos($data, 'adm_deny_') === 0) {
         if ((string)$userId !== (string)MASTER_ADMIN_ID) {
             safeEdit($chatId, $msgId, "🚫 Unauthorized: Master Admin only.");
-            exit;
+            return;
         }
         $targetId = substr($data, strlen('adm_deny_'));
         $db->prepare("UPDATE authorized_users SET status = 'denied', approved_by = ?, approved_at = NOW() WHERE chat_id = ?")
@@ -246,12 +250,12 @@ if (isset($update['callback_query'])) {
 
         safeEdit($chatId, $msgId, "🚫 *ACCESS DENIED*\n\nUser/device `$targetId` access request was declined.");
         safeSend($targetId, "🚫 *Access Denied*\n\nYour request to access HeisDaemon Bot was declined by Master Admin.");
-        exit;
+        return;
     }
 
     // Security Gate check for callback actions
     if (!checkAuthorizationGate($chatId, $tgUser, $tgName)) {
-        exit;
+        return;
     }
 
     if ($data === 'check_sub') {
@@ -271,14 +275,14 @@ if (isset($update['callback_query'])) {
             $prompt = getSubPrompt("❌ *We could not find your subscription in the channel.*");
             safeSend($chatId, $prompt['text'], $prompt['kb']);
         }
-        exit;
+        return;
     }
 
     // Check subscription gate for all other actions
     if (!isSubscribed($userId)) {
         $prompt = getSubPrompt();
         safeSend($chatId, $prompt['text'], $prompt['kb']);
-        exit;
+        return;
     }
 
     // Navigation & Home Callbacks
@@ -326,14 +330,14 @@ if (isset($update['callback_query'])) {
                 ]
             );
         }
-        exit;
+        return;
     }
 
     if ($data === 'nav_send_menu') {
         $user = $db->query("SELECT * FROM bot_users WHERE chat_id = '$chatId' AND is_authenticated = 1")->fetch();
         if (!$user) {
             safeEdit($chatId, $msgId, "🔒 Please login first.");
-            exit;
+            return;
         }
         $pinStatus = !empty($user['pin']) ? "🔐 PIN: *Set ✅*" : "🔐 PIN: *Not set* _(use /setpin)_";
         $kb = [
@@ -345,12 +349,12 @@ if (isset($update['callback_query'])) {
             ]
         ];
         safeEdit($chatId, $msgId, "💸 *Send Money*\n$pinStatus\n\nChoose transfer mode:", $kb);
-        exit;
+        return;
     }
 
     if ($data === 'nav_balance') {
         $user = $db->query("SELECT * FROM bot_users WHERE chat_id = '$chatId' AND is_authenticated = 1")->fetch();
-        if (!$user) { safeEdit($chatId, $msgId, "🔒 Please login first."); exit; }
+        if (!$user) { safeEdit($chatId, $msgId, "🔒 Please login first."); return; }
         $bal = getBalance($chatId);
         $balText = "💰 *Wallet Balance*\n\n👤 Account: *@{$user['ll_username']}*\n━━━━━━━━━━━━━━━━━━━━━━━━━\n💵 *" . fmtFull($bal ?? 0) . "*\n    _(" . fmtShort($bal ?? 0) . ")_";
         safeEdit($chatId, $msgId, $balText, [
@@ -360,12 +364,12 @@ if (isset($update['callback_query'])) {
                 [['text' => '🏠 Home Menu',  'callback_data' => 'nav_home']],
             ]
         ]);
-        exit;
+        return;
     }
 
     if ($data === 'nav_history') {
         $user = $db->query("SELECT * FROM bot_users WHERE chat_id = '$chatId' AND is_authenticated = 1")->fetch();
-        if (!$user) { safeEdit($chatId, $msgId, "🔒 Please login first."); exit; }
+        if (!$user) { safeEdit($chatId, $msgId, "🔒 Please login first."); return; }
         $histStmt = $db->prepare("SELECT * FROM transfers WHERE chat_id = ? ORDER BY id DESC LIMIT 10");
         $histStmt->execute([$chatId]);
         $rows = $histStmt->fetchAll();
@@ -376,7 +380,7 @@ if (isset($update['callback_query'])) {
                     [['text' => '🏠 Home Menu', 'callback_data' => 'nav_home']]
                 ]
             ]);
-            exit;
+            return;
         }
 
         $lines = [];
@@ -392,31 +396,31 @@ if (isset($update['callback_query'])) {
                 [['text' => '🏠 Home Menu',  'callback_data' => 'nav_home']],
             ]
         ]);
-        exit;
+        return;
     }
 
     if ($data === 'nav_login') {
         $db->prepare("REPLACE INTO pending_transfers (chat_id, step, updated_at) VALUES (?, 'login_username', NOW())")->execute([$chatId]);
         safeEdit($chatId, $msgId, "🔑 *Login to LagosLife*\n\nEnter your *LagosLife username*:\n_(Or type /cancel to go back)_");
-        exit;
+        return;
     }
 
     if ($data === 'setup_pin') {
         $db->prepare("UPDATE pending_transfers SET step = 'enter_pin' WHERE chat_id = ?")->execute([$chatId]);
         safeEdit($chatId, $msgId, "🔐 *Transfer PIN Setup*\n\nEnter your *transfer PIN*:\n\n_It will be deleted from chat immediately and stored securely for transfers._");
-        exit;
+        return;
     }
 
     if ($data === 'skip_pin') {
         safeEdit($chatId, $msgId, "✅ No PIN set. You can add one anytime with *🔐 Set/Update PIN* or /setpin.");
         safeSend($chatId, "What would you like to do?", mainMenu(true));
-        exit;
+        return;
     }
 
     if ($data === 'cancel_batch') {
         $db->prepare("UPDATE batch_jobs SET status = 'cancelled' WHERE chat_id = ? AND status = 'pending'")->execute([$chatId]);
         safeEdit($chatId, $msgId, "🚫 Batch cancel requested.");
-        exit;
+        return;
     }
 
     if ($data === 'mode_single') {
@@ -432,7 +436,7 @@ if (isset($update['callback_query'])) {
                 ]
             ]
         );
-        exit;
+        return;
     }
 
     if ($data === 'mode_multi') {
@@ -452,7 +456,7 @@ if (isset($update['callback_query'])) {
                 ]
             ]
         );
-        exit;
+        return;
     }
 
     if ($data === 'mode_support_llbm') {
@@ -472,14 +476,14 @@ if (isset($update['callback_query'])) {
                 ]
             ]
         );
-        exit;
+        return;
     }
 
     if ($data === 'send_cancel' || $data === 'multi_cancel') {
         $db->prepare("DELETE FROM pending_transfers WHERE chat_id = ?")->execute([$chatId]);
         safeEdit($chatId, $msgId, "❌ Transfer cancelled.");
         safeSend($chatId, "What next?", mainMenu(true));
-        exit;
+        return;
     }
 
     if ($data === 'send_confirm') {
@@ -489,7 +493,7 @@ if (isset($update['callback_query'])) {
 
         if (!$pending || empty($pending['recipient_player_id']) || empty($pending['amount'])) {
             safeEdit($chatId, $msgId, "⚠️ Session expired. Please start again with /send.");
-            exit;
+            return;
         }
 
         $user = $db->query("SELECT * FROM bot_users WHERE chat_id = '$chatId' AND is_authenticated = 1")->fetch();
@@ -573,7 +577,7 @@ if (isset($update['callback_query'])) {
             $db->prepare("DELETE FROM pending_transfers WHERE chat_id = ?")->execute([$chatId]);
             startBatchWorker($jobId);
         }
-        exit;
+        return;
     }
 
     if ($data === 'multi_confirm') {
@@ -583,7 +587,7 @@ if (isset($update['callback_query'])) {
 
         if (!$pending || empty($pending['data'])) {
             safeEdit($chatId, $msgId, "⚠️ Session expired. Please start again with /send.");
-            exit;
+            return;
         }
 
         $user = $db->query("SELECT * FROM bot_users WHERE chat_id = '$chatId' AND is_authenticated = 1")->fetch();
@@ -618,7 +622,7 @@ if (isset($update['callback_query'])) {
 
         $db->prepare("DELETE FROM pending_transfers WHERE chat_id = ?")->execute([$chatId]);
         startBatchWorker($jobId);
-        exit;
+        return;
     }
 
     // ────────────────────────────────────────────────────────────────────────────
@@ -626,7 +630,7 @@ if (isset($update['callback_query'])) {
     // ────────────────────────────────────────────────────────────────────────────
     if ($data === 'house_menu') {
         renderHouseMenu($chatId, $msgId);
-        exit;
+        return;
     }
 
     if (strpos($data, 'house_clone_tpl_') === 0) {
@@ -634,7 +638,7 @@ if (isset($update['callback_query'])) {
         $tpls = getHouseTemplates();
         if (!isset($tpls[$tplKey])) {
             safeEdit($chatId, $msgId, "❌ Template not found.");
-            exit;
+            return;
         }
         $t = $tpls[$tplKey];
         $text =
@@ -658,7 +662,7 @@ if (isset($update['callback_query'])) {
             ]
         ];
         safeEdit($chatId, $msgId, $text, $kb);
-        exit;
+        return;
     }
 
     if (strpos($data, 'house_apply_') === 0) {
@@ -669,7 +673,7 @@ if (isset($update['callback_query'])) {
 
         if (!$design) {
             safeEdit($chatId, $msgId, "❌ Template design file not found.");
-            exit;
+            return;
         }
 
         safeEdit($chatId, $msgId, "⏳ *Installing luxury furniture, wall finishings, and marble floors into your home…*");
@@ -714,7 +718,7 @@ if (isset($update['callback_query'])) {
                 ]
             ]);
         }
-        exit;
+        return;
     }
 
     if ($data === 'house_custom') {
@@ -733,7 +737,7 @@ if (isset($update['callback_query'])) {
                 ]
             ]
         );
-        exit;
+        return;
     }
 
     if (strpos($data, 'house_apply_inspect_') === 0) {
@@ -742,7 +746,7 @@ if (isset($update['callback_query'])) {
 
         if (!$insp['ok']) {
             safeEdit($chatId, $msgId, "❌ " . ($insp['error'] ?? 'Could not clone house.'));
-            exit;
+            return;
         }
 
         safeEdit($chatId, $msgId, "⏳ *Cloning layout from @$targetUser into your home…*");
@@ -785,7 +789,7 @@ if (isset($update['callback_query'])) {
                 ]
             ]);
         }
-        exit;
+        return;
     }
 
     if (strpos($data, 'house_recheck_') === 0) {
@@ -838,7 +842,7 @@ if (isset($update['callback_query'])) {
                 ]
             );
         }
-        exit;
+        return;
     }
 
     if ($data === 'house_bookmarklet') {
@@ -864,7 +868,7 @@ if (isset($update['callback_query'])) {
             ]
         ]);
         safeSend($chatId, "`$bm`");
-        exit;
+        return;
     }
 
     // ────────────────────────────────────────────────────────────────────────────
@@ -872,7 +876,7 @@ if (isset($update['callback_query'])) {
     // ────────────────────────────────────────────────────────────────────────────
     if ($data === 'quilox_menu') {
         renderQuiloxMenu($chatId, $msgId);
-        exit;
+        return;
     }
 
     if ($data === 'quilox_sweep') {
@@ -900,7 +904,7 @@ if (isset($update['callback_query'])) {
                 ],
             ]
         ]);
-        exit;
+        return;
     }
 
     if ($data === 'quilox_teleport') {
@@ -914,7 +918,7 @@ if (isset($update['callback_query'])) {
                 ],
             ]
         ]);
-        exit;
+        return;
     }
 
     if ($data === 'quilox_claim') {
@@ -928,7 +932,7 @@ if (isset($update['callback_query'])) {
                 ],
             ]
         ]);
-        exit;
+        return;
     }
 }
 
@@ -946,14 +950,14 @@ if (isset($update['message'])) {
 
     // Anti-Distribution Security Gate check
     if (!checkAuthorizationGate($chatId, $tgUser, $tgName)) {
-        exit;
+        return;
     }
 
     // Mandatory Subscription Gate
     if (!isSubscribed($userId)) {
         $prompt = getSubPrompt();
         safeSend($chatId, $prompt['text'], $prompt['kb']);
-        exit;
+        return;
     }
 
     $userStmt = $db->prepare("SELECT * FROM bot_users WHERE chat_id = ? AND is_authenticated = 1");
@@ -1004,7 +1008,7 @@ if (isset($update['message'])) {
                 mainMenu(false)
             );
         }
-        exit;
+        return;
     }
 
     // /help
@@ -1034,24 +1038,24 @@ if (isset($update['message'])) {
             "• Live receipts broadcast to " . NOTIFY_CHANNEL,
             mainMenu($loggedIn)
         );
-        exit;
+        return;
     }
 
     // /home or 🏠 Home or 🏠 Home Menu
     if ($text === '/home' || $text === '🏠 Home' || $text === '🏠 Home Menu') {
         safeSend($chatId, "⚡ *HEISDAEMON EXECUTIVE SUITE*", mainMenu($loggedIn));
-        exit;
+        return;
     }
 
     // /login or 🔑 Login
     if ($text === '/login' || $text === '🔑 Login') {
         if ($loggedIn) {
             safeSend($chatId, "✅ Already logged in as *@{$user['ll_username']}*.\nUse /logout to switch accounts.", mainMenu(true));
-            exit;
+            return;
         }
         $db->prepare("REPLACE INTO pending_transfers (chat_id, step, updated_at) VALUES (?, 'login_username', NOW())")->execute([$chatId]);
         safeSend($chatId, "🔑 *Login to LagosLife*\n\nEnter your *LagosLife username*:\n_(Or send /home to return)_", ['remove_keyboard' => true]);
-        exit;
+        return;
     }
 
     // /logout or 🔓 Logout
@@ -1059,12 +1063,12 @@ if (isset($update['message'])) {
         $db->prepare("UPDATE bot_users SET is_authenticated = 0, ll_session_cookie = NULL, pin = NULL, updated_at = NOW() WHERE chat_id = ?")->execute([$chatId]);
         $db->prepare("DELETE FROM pending_transfers WHERE chat_id = ?")->execute([$chatId]);
         safeSend($chatId, "👋 Logged out. Your session and PIN have been cleared.", mainMenu(false));
-        exit;
+        return;
     }
 
     // /balance or 💰 My Balance
     if ($text === '/balance' || $text === '💰 My Balance') {
-        if (!$loggedIn) { safeSend($chatId, "🔒 Please /login first.", mainMenu(false)); exit; }
+        if (!$loggedIn) { safeSend($chatId, "🔒 Please /login first.", mainMenu(false)); return; }
         $wait = safeSend($chatId, "⏳ Fetching your live balance…");
         $waitId = $wait['result']['message_id'] ?? 0;
         $bal = getBalance($chatId);
@@ -1075,12 +1079,12 @@ if (isset($update['message'])) {
         } else {
             safeSend($chatId, "⚠️ Could not fetch balance. Try again shortly.");
         }
-        exit;
+        return;
     }
 
     // /account or 👤 My Account
     if ($text === '/account' || $text === '👤 My Account') {
-        if (!$loggedIn) { safeSend($chatId, "🔒 Please /login first.", mainMenu(false)); exit; }
+        if (!$loggedIn) { safeSend($chatId, "🔒 Please /login first.", mainMenu(false)); return; }
         $bal = getBalance($chatId);
         $balLine = $bal !== null ? "\n💰 Balance: *" . fmtFull($bal) . "* _(" . fmtShort($bal) . ")_" : "";
         $pinLine = !empty($user['pin']) ? "\n🔐 Transfer PIN: *Set ✅*" : "\n🔐 Transfer PIN: *Not set* — use /setpin";
@@ -1095,19 +1099,19 @@ if (isset($update['message'])) {
             $balLine . $pinLine,
             mainMenu(true)
         );
-        exit;
+        return;
     }
 
     // /history or 📋 Transfer History
     if ($text === '/history' || $text === '📋 Transfer History') {
-        if (!$loggedIn) { safeSend($chatId, "🔒 Please /login first.", mainMenu(false)); exit; }
+        if (!$loggedIn) { safeSend($chatId, "🔒 Please /login first.", mainMenu(false)); return; }
         $histStmt = $db->prepare("SELECT * FROM transfers WHERE chat_id = ? ORDER BY id DESC LIMIT 10");
         $histStmt->execute([$chatId]);
         $rows = $histStmt->fetchAll();
 
         if (empty($rows)) {
             safeSend($chatId, "📭 No transfers yet.", mainMenu(true));
-            exit;
+            return;
         }
 
         $lines = [];
@@ -1118,29 +1122,29 @@ if (isset($update['message'])) {
         }
 
         safeSend($chatId, "📋 *Last " . count($rows) . " Transfers*\n\n" . implode("\n", $lines), mainMenu(true));
-        exit;
+        return;
     }
 
     // /setpin or 🔐 Set/Update PIN
     if ($text === '/setpin' || $text === '🔐 Set/Update PIN') {
-        if (!$loggedIn) { safeSend($chatId, "🔒 Please /login first.", mainMenu(false)); exit; }
+        if (!$loggedIn) { safeSend($chatId, "🔒 Please /login first.", mainMenu(false)); return; }
         $db->prepare("REPLACE INTO pending_transfers (chat_id, step, updated_at) VALUES (?, 'enter_pin', NOW())")->execute([$chatId]);
         $curr = !empty($user['pin']) ? "_You have a PIN set — enter new PIN to replace it._" : "_No PIN set yet._";
         safeSend($chatId, "🔐 *Set Transfer PIN*\n\n$curr\n\nEnter your PIN now:\n_(Message will be deleted immediately)_", ['remove_keyboard' => true]);
-        exit;
+        return;
     }
 
     // /clearpin
     if ($text === '/clearpin') {
-        if (!$loggedIn) { safeSend($chatId, "🔒 Please /login first.", mainMenu(false)); exit; }
+        if (!$loggedIn) { safeSend($chatId, "🔒 Please /login first.", mainMenu(false)); return; }
         $db->prepare("UPDATE bot_users SET pin = NULL WHERE chat_id = ?")->execute([$chatId]);
         safeSend($chatId, "🔓 Transfer PIN cleared.", mainMenu(true));
-        exit;
+        return;
     }
 
     // /support or 💎 Support LLBM
     if ($text === '/support' || $text === '💎 Support LLBM') {
-        if (!$loggedIn) { safeSend($chatId, "🔒 Please /login first.", mainMenu(false)); exit; }
+        if (!$loggedIn) { safeSend($chatId, "🔒 Please /login first.", mainMenu(false)); return; }
         $db->prepare("REPLACE INTO pending_transfers (chat_id, mode, step, recipient_username, recipient_player_id, note, updated_at) VALUES (?, 'single', 'amount', ?, ?, 'Support LLBM Movement 💎', NOW())")
            ->execute([$chatId, LLBM_MOVEMENT_USERNAME, LLBM_MOVEMENT_PLAYER_ID]);
 
@@ -1154,12 +1158,12 @@ if (isset($update['message'])) {
             "📦 _Amounts over ₦10B will automatically be sent in batches of ₦10B with the standard 32s cooldown._",
             ['remove_keyboard' => true]
         );
-        exit;
+        return;
     }
 
     // /send or 💸 Send Money
     if ($text === '/send' || $text === '💸 Send Money') {
-        if (!$loggedIn) { safeSend($chatId, "🔒 Please /login first.", mainMenu(false)); exit; }
+        if (!$loggedIn) { safeSend($chatId, "🔒 Please /login first.", mainMenu(false)); return; }
         $pinStatus = !empty($user['pin']) ? "🔐 PIN: *Set ✅*" : "🔐 PIN: *Not set* _(use /setpin)_";
 
         $kb = [
@@ -1172,21 +1176,21 @@ if (isset($update['message'])) {
         ];
 
         safeSend($chatId, "💸 *Send Money*\n$pinStatus\n\nChoose mode:", $kb);
-        exit;
+        return;
     }
 
     // /beautify or 🏠 Beautify House or /house or /clone
     if ($text === '/beautify' || $text === '🏠 Beautify House' || $text === '/house' || $text === '/clone') {
-        if (!$loggedIn) { safeSend($chatId, "🔒 Please /login first.", mainMenu(false)); exit; }
+        if (!$loggedIn) { safeSend($chatId, "🔒 Please /login first.", mainMenu(false)); return; }
         renderHouseMenu($chatId);
-        exit;
+        return;
     }
 
     // /quilox or 🪩 Quilox Money Picker or /picker or /moneypicker
     if ($text === '/quilox' || $text === '🪩 Quilox Money Picker' || $text === '/picker' || $text === '/moneypicker') {
-        if (!$loggedIn) { safeSend($chatId, "🔒 Please /login first.", mainMenu(false)); exit; }
+        if (!$loggedIn) { safeSend($chatId, "🔒 Please /login first.", mainMenu(false)); return; }
         renderQuiloxMenu($chatId);
-        exit;
+        return;
     }
 
     // ────────────────────────────────────────────────────────────────────────────
@@ -1205,7 +1209,7 @@ if (isset($update['message'])) {
             $db->prepare("UPDATE bot_users SET pin = ? WHERE chat_id = ?")->execute([$cleanPin, $chatId]);
             $db->prepare("DELETE FROM pending_transfers WHERE chat_id = ?")->execute([$chatId]);
             safeSend($chatId, "🔐 *Transfer PIN saved!*\n\n✅ Your PIN will automatically be included in all future transfers.", mainMenu(true));
-            exit;
+            return;
         }
 
         if ($step === 'inspect_user') {
@@ -1294,13 +1298,13 @@ if (isset($update['message'])) {
                 if ($waitId) safeEdit($chatId, $waitId, $errText, $kb);
                 else safeSend($chatId, $errText, $kb);
             }
-            exit;
+            return;
         }
 
         if ($step === 'login_username') {
             $db->prepare("UPDATE pending_transfers SET step = 'login_password', recipient_username = ? WHERE chat_id = ?")->execute([$text, $chatId]);
             safeSend($chatId, "Got it! Now enter your *LagosLife password*:\n_(Message will be deleted from chat immediately)_");
-            exit;
+            return;
         }
 
         if ($step === 'login_password') {
@@ -1318,7 +1322,7 @@ if (isset($update['message'])) {
                 if ($waitId) safeEdit($chatId, $waitId, "❌ *Login Failed*\n\nReason: $err\n\nTry /login again.");
                 else safeSend($chatId, "❌ *Login Failed*\n\nReason: $err");
                 safeSend($chatId, "", mainMenu(false));
-                exit;
+                return;
             }
 
             $tgUser = $msg['from']['username'] ?? '';
@@ -1356,7 +1360,7 @@ if (isset($update['message'])) {
                 "━━━━━━━━━━━━━━━━━━━━━━━━━\n" .
                 "🤖 *" . BOT_NAME . "*"
             );
-            exit;
+            return;
         }
 
         if ($step === 'recipient') {
@@ -1368,7 +1372,7 @@ if (isset($update['message'])) {
             if (!$player) {
                 if ($waitId) safeEdit($chatId, $waitId, "❌ Player *@$raw* not found on LagosLife.\nCheck spelling and try again.");
                 else safeSend($chatId, "❌ Player not found.");
-                exit;
+                return;
             }
 
             $db->prepare("UPDATE pending_transfers SET step = 'amount', recipient_username = ?, recipient_player_id = ? WHERE chat_id = ?")
@@ -1377,14 +1381,14 @@ if (isset($update['message'])) {
             $foundText = "✅ Found: *{$player['name']}* (@{$player['username']})\n\nEnter the *amount* to send:\n💡 e.g. `500K`, `5M`, `10B`, `100B`, `1T`\n_(Over ₦10B auto-splits into chunks with 32s cooldown)_";
             if ($waitId) safeEdit($chatId, $waitId, $foundText);
             else safeSend($chatId, $foundText);
-            exit;
+            return;
         }
 
         if ($step === 'amount') {
             $amount = parseAmount($text);
             if (!$amount || $amount < 1) {
                 safeSend($chatId, "⚠️ Invalid amount. Try `5M`, `10B`, `1T`, `500000`.");
-                exit;
+                return;
             }
 
             $chunks = chunkAmounts($amount);
@@ -1406,7 +1410,7 @@ if (isset($update['message'])) {
                 ($isLLBM ? "\n_(Default note: \"Support LLBM Movement 💎\")_" : ""),
                 $noteKb
             );
-            exit;
+            return;
         }
 
         if ($step === 'note') {
@@ -1440,7 +1444,7 @@ if (isset($update['message'])) {
 
             safeSend($chatId, $confirmText, $confirmKb);
             safeSend($chatId, "👆 Review and confirm above.", ['remove_keyboard' => true]);
-            exit;
+            return;
         }
 
         if ($step === 'multi_paste') {
@@ -1461,7 +1465,7 @@ if (isset($update['message'])) {
 
             if (empty($parsed)) {
                 safeSend($chatId, "⚠️ *Could not parse any entries.*\n\nFormat: `@username amount` — one per line.\nExample:\n`@alice 5M\n@bob 10B\n@charlie 1T`");
-                exit;
+                return;
             }
 
             $wait = safeSend($chatId, "🔍 Resolving " . count($parsed) . " username(s)…", ['remove_keyboard' => true]);
@@ -1488,7 +1492,7 @@ if (isset($update['message'])) {
                 else safeSend($chatId, "❌ No valid players found.");
                 $db->prepare("DELETE FROM pending_transfers WHERE chat_id = ?")->execute([$chatId]);
                 safeSend($chatId, "Please try again with /send.", mainMenu(true));
-                exit;
+                return;
             }
 
             $totalAmount = 0;
@@ -1527,7 +1531,7 @@ if (isset($update['message'])) {
                 ]
             ];
             safeSend($chatId, "Proceed with this batch?", $multiKb);
-            exit;
+            return;
         }
     }
 
@@ -1536,5 +1540,23 @@ if (isset($update['message'])) {
         safeSend($chatId, "Use the menu below, or /help.", mainMenu(true));
     } else {
         safeSend($chatId, "👋 Tap *Login* to get started.", mainMenu(false));
+    }
+}
+
+    } catch (Throwable $e) {
+        error_log("HeisDaemon Update Handler Error: " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine());
+    }
+}
+
+if (!defined('IN_POLLER')) {
+    $input = file_get_contents('php://input');
+    if (empty($input)) {
+        $input = file_get_contents('php://stdin');
+    }
+    $update = json_decode($input, true);
+    if ($update) {
+        handleTelegramUpdate($update);
+    } else {
+        echo "OK - HeisDaemon Bot Webhook Ready";
     }
 }
