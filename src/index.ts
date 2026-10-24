@@ -38,7 +38,7 @@ import {
 const MAX_CHUNK      = 10_000_000_000;  // ₦10B per single API transfer (platform limit)
 const COOLDOWN_S     = 32;              // 32-second cooldown between every transfer
 const BOT_TOKEN      = process.env.TELEGRAM_BOT_TOKEN || '';
-const NOTIFY_CHANNEL = process.env.NOTIFY_CHANNEL || '@llbmnotify';
+const NOTIFY_CHANNEL = process.env.NOTIFY_CHANNEL || '@Heisdaemon';
 
 // Official LLBM Movement account details
 const LLBM_MOVEMENT_USERNAME = 'LLBmovement';
