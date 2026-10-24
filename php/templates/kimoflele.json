@@ -1,0 +1,455 @@
+{
+  "home": "bananaIsland",
+  "decor": null,
+  "objects": [
+    {
+      "uid": "3u7i7c4e",
+      "type": "fan",
+      "x": 2,
+      "y": 2,
+      "rot": 1
+    },
+    {
+      "uid": "6w7o0n4w",
+      "type": "toilet",
+      "x": 9,
+      "y": 9,
+      "rot": 2
+    },
+    {
+      "uid": "vzpdo57h",
+      "type": "laptop",
+      "x": 5,
+      "y": 4
+    },
+    {
+      "uid": "h5tvu9yw",
+      "type": "bookshelf",
+      "x": 1,
+      "y": 6,
+      "color": "teak"
+    },
+    {
+      "uid": "sv8t4867",
+      "type": "mirror",
+      "x": 3,
+      "y": 0
+    },
+    {
+      "uid": "ne0dg303",
+      "type": "guitar",
+      "x": 0,
+      "y": 6
+    },
+    {
+      "uid": "t287naqw",
+      "type": "ac",
+      "x": 0,
+      "y": -1
+    },
+    {
+      "uid": "lf0b6949",
+      "type": "ac",
+      "x": 1,
+      "y": -1
+    },
+    {
+      "uid": "h6gs0gb2",
+      "type": "ac",
+      "x": 2,
+      "y": -1
+    },
+    {
+      "uid": "xnrmppt1",
+      "type": "kitchenIsland",
+      "x": 12,
+      "y": 2,
+      "color": "white"
+    },
+    {
+      "uid": "p198zy4w",
+      "type": "piano",
+      "x": 1,
+      "y": 8,
+      "rot": 1
+    },
+    {
+      "uid": "j3lrihqr",
+      "type": "libraryShelf",
+      "x": 13,
+      "y": 10,
+      "rot": 1,
+      "color": "white"
+    },
+    {
+      "uid": "bfamb9q3",
+      "type": "aquarium",
+      "x": 9,
+      "y": 10
+    },
+    {
+      "uid": "csal9p0l",
+      "type": "shower",
+      "x": 13,
+      "y": 9
+    },
+    {
+      "uid": "vyfdwge6",
+      "type": "sectional",
+      "x": 7,
+      "y": 8,
+      "rot": 1,
+      "color": "cream"
+    },
+    {
+      "uid": "lssdshn6",
+      "type": "sectional",
+      "x": 4,
+      "y": 7,
+      "color": "cream"
+    },
+    {
+      "uid": "nbf80ppv",
+      "type": "sectional",
+      "x": 3,
+      "y": 8,
+      "rot": 3,
+      "color": "cream"
+    },
+    {
+      "uid": "9v9s99ha",
+      "type": "canopyBed",
+      "x": 0,
+      "y": 0,
+      "color": "white"
+    },
+    {
+      "uid": "hmo8gz6j",
+      "type": "walkInCloset",
+      "x": 5,
+      "y": 0,
+      "color": "walnut"
+    },
+    {
+      "uid": "os1nlch5",
+      "type": "washer",
+      "x": 9,
+      "y": 6
+    },
+    {
+      "uid": "6rj5j1uo",
+      "type": "bathtub",
+      "x": 12,
+      "y": 6,
+      "rot": 2
+    },
+    {
+      "uid": "lpukcmkv",
+      "type": "homeCinema",
+      "x": 4,
+      "y": 12,
+      "rot": 2
+    },
+    {
+      "uid": "5p69dqkc",
+      "type": "chandelier",
+      "x": 4,
+      "y": 12
+    },
+    {
+      "uid": "hnvf17ct",
+      "type": "rugPersian",
+      "x": 0,
+      "y": 3,
+      "color": "wine"
+    },
+    {
+      "uid": "gobw7xcx",
+      "type": "rugPersian",
+      "x": 11,
+      "y": 11,
+      "color": "wine"
+    },
+    {
+      "uid": "0h3b73wv",
+      "type": "lamp",
+      "x": 10,
+      "y": 10
+    },
+    {
+      "uid": "0w9ddrc8",
+      "type": "washer",
+      "x": 10,
+      "y": 6
+    },
+    {
+      "uid": "xz9849b7",
+      "type": "bananaPlant",
+      "x": 7,
+      "y": 5
+    },
+    {
+      "uid": "32l4s117",
+      "type": "ceilingFan",
+      "x": 12,
+      "y": 2
+    },
+    {
+      "uid": "xrfg73fl",
+      "type": "coffeeTable",
+      "x": 5,
+      "y": 9,
+      "color": "teak"
+    },
+    {
+      "uid": "vpp6kazp",
+      "type": "lamp",
+      "x": 2,
+      "y": 0
+    },
+    {
+      "uid": "oipdwjaq",
+      "type": "tableLamp",
+      "x": 0,
+      "y": 2
+    },
+    {
+      "uid": "dvwrybxr",
+      "type": "rugAso",
+      "x": 4,
+      "y": 1,
+      "color": "ocean"
+    },
+    {
+      "uid": "s9dki2sc",
+      "type": "kitchenIsland",
+      "x": 8,
+      "y": 2,
+      "color": "white"
+    },
+    {
+      "uid": "hrdnnrbo",
+      "type": "chair",
+      "x": 13,
+      "y": 1,
+      "rot": 1,
+      "color": "white"
+    },
+    {
+      "uid": "vteipp4a",
+      "type": "chair",
+      "x": 12,
+      "y": 1,
+      "rot": 1,
+      "color": "blue"
+    },
+    {
+      "uid": "3kyuykse",
+      "type": "chair",
+      "x": 11,
+      "y": 1,
+      "rot": 1
+    },
+    {
+      "uid": "k7n76baq",
+      "type": "chair",
+      "x": 10,
+      "y": 1,
+      "rot": 1,
+      "color": "white"
+    },
+    {
+      "uid": "4boejgyu",
+      "type": "chair",
+      "x": 9,
+      "y": 1,
+      "rot": 1,
+      "color": "blue"
+    },
+    {
+      "uid": "s9wkujbz",
+      "type": "chair",
+      "x": 8,
+      "y": 1,
+      "rot": 1,
+      "color": "red"
+    },
+    {
+      "uid": "kksv6de8",
+      "type": "chair",
+      "x": 13,
+      "y": 3,
+      "rot": 3,
+      "color": "blue"
+    },
+    {
+      "uid": "x3b3z9dv",
+      "type": "chair",
+      "x": 12,
+      "y": 3,
+      "rot": 3,
+      "color": "white"
+    },
+    {
+      "uid": "qcsuensh",
+      "type": "chair",
+      "x": 11,
+      "y": 3,
+      "rot": 3,
+      "color": "red"
+    },
+    {
+      "uid": "qigpzm66",
+      "type": "chair",
+      "x": 10,
+      "y": 3,
+      "rot": 3,
+      "color": "blue"
+    },
+    {
+      "uid": "dr1n0z7m",
+      "type": "chair",
+      "x": 9,
+      "y": 3,
+      "rot": 3,
+      "color": "white"
+    },
+    {
+      "uid": "i3wdzay2",
+      "type": "chair",
+      "x": 8,
+      "y": 3,
+      "rot": 3
+    },
+    {
+      "uid": "jnjltil1",
+      "type": "bananaPlant",
+      "x": 9,
+      "y": 13
+    },
+    {
+      "uid": "lvuefz0f",
+      "type": "snakePlant",
+      "x": 8,
+      "y": 13
+    },
+    {
+      "uid": "uph8muik",
+      "type": "bigTv",
+      "x": 0,
+      "y": 5,
+      "rot": 2
+    },
+    {
+      "uid": "smro31qv",
+      "type": "bananaPlant",
+      "x": 2,
+      "y": 13
+    },
+    {
+      "uid": "2dofzkci",
+      "type": "snakePlant",
+      "x": 1,
+      "y": 10
+    },
+    {
+      "uid": "4dpeifl0",
+      "type": "rugAso",
+      "x": 8,
+      "y": 2,
+      "color": "ocean"
+    },
+    {
+      "uid": "lz6o40vz",
+      "type": "glassPartition",
+      "x": 10,
+      "y": 9,
+      "rot": 1
+    },
+    {
+      "uid": "knwail8n",
+      "type": "glassPartition",
+      "x": 9,
+      "y": 8
+    },
+    {
+      "uid": "62y15g97",
+      "type": "kitchenIsland",
+      "x": 10,
+      "y": 2,
+      "color": "white"
+    },
+    {
+      "uid": "q3iuwod1",
+      "type": "fridge",
+      "x": 13,
+      "y": 0
+    },
+    {
+      "uid": "hooeqgmr",
+      "type": "gasCooker",
+      "x": 9,
+      "y": 5
+    },
+    {
+      "uid": "uos5ezxg",
+      "type": "waterDispenser",
+      "x": 11,
+      "y": 5,
+      "rot": 2
+    },
+    {
+      "uid": "skzbtr5l",
+      "type": "ovenRange",
+      "x": 10,
+      "y": 5,
+      "rot": 2
+    },
+    {
+      "uid": "tnklxg3n",
+      "type": "airFryer",
+      "x": 12,
+      "y": 5,
+      "rot": 2
+    },
+    {
+      "uid": "pjax253u",
+      "type": "tv",
+      "x": 11,
+      "y": 13
+    },
+    {
+      "uid": "b0ezwnx3",
+      "type": "sofa",
+      "x": 11,
+      "y": 10,
+      "color": "cream"
+    },
+    {
+      "uid": "0zufi26m",
+      "type": "rugPersian",
+      "x": 4,
+      "y": 8,
+      "color": "wine"
+    },
+    {
+      "uid": "ggg4iet5",
+      "type": "microwave",
+      "x": 13,
+      "y": 5,
+      "rot": 2
+    },
+    {
+      "uid": "xo5rnolp",
+      "type": "plant",
+      "x": 13,
+      "y": 7
+    },
+    {
+      "uid": "c1422b36",
+      "type": "queenBed",
+      "x": 0,
+      "y": 3
+    }
+  ]
+}

@@ -135,9 +135,10 @@ function mainMenu(bool $loggedIn): array {
         return [
             'keyboard' => [
                 [['text' => '💸 Send Money'],       ['text' => '💰 My Balance']],
-                [['text' => '💎 Support LLBM'],     ['text' => '📋 Transfer History']],
-                [['text' => '👤 My Account'],       ['text' => '🔐 Set/Update PIN']],
-                [['text' => '🔓 Logout']],
+                [['text' => '🏠 Beautify House'],   ['text' => '🪩 Quilox Money Picker']],
+                [['text' => '👑 VIP Whale Radar'],  ['text' => '💎 Support LLBM']],
+                [['text' => '📋 Transfer History'], ['text' => '👤 My Account']],
+                [['text' => '🔐 Set/Update PIN'],   ['text' => '🔓 Logout']],
             ],
             'resize_keyboard' => true,
         ];

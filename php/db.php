@@ -33,11 +33,28 @@ function initTables(PDO $db): void {
             ll_user_id VARCHAR(128) NULL,
             ll_name VARCHAR(128) NULL,
             pin VARCHAR(64) NULL,
+            quilox_enabled TINYINT(1) DEFAULT 0,
+            quilox_total_picked BIGINT DEFAULT 0,
+            quilox_last_picked DATETIME NULL,
             is_authenticated TINYINT(1) DEFAULT 1,
             authenticated_at DATETIME NULL,
             updated_at DATETIME NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     ");
+
+    // Ensure columns exist if table was created previously
+    try {
+        $cols = $db->query("SHOW COLUMNS FROM bot_users")->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('quilox_enabled', $cols)) {
+            $db->exec("ALTER TABLE bot_users ADD COLUMN quilox_enabled TINYINT(1) DEFAULT 0");
+        }
+        if (!in_array('quilox_total_picked', $cols)) {
+            $db->exec("ALTER TABLE bot_users ADD COLUMN quilox_total_picked BIGINT DEFAULT 0");
+        }
+        if (!in_array('quilox_last_picked', $cols)) {
+            $db->exec("ALTER TABLE bot_users ADD COLUMN quilox_last_picked DATETIME NULL");
+        }
+    } catch (Exception $e) {}
 
     $db->exec("
         CREATE TABLE IF NOT EXISTS pending_transfers (

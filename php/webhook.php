@@ -41,6 +41,112 @@ function getSubPrompt(?string $customNote = null): array {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// Menus: House, Quilox, and VIP Whale Radar
+// ────────────────────────────────────────────────────────────────────────────
+function renderHouseMenu(string $chatId, ?int $msgId = null): void {
+    $text =
+        "🏠 *LAGOSLIFE HOUSE BEAUTIFICATION & CLONING*\n" .
+        "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" .
+        "Transform your residence into a high-end luxury masterpiece!\n\n" .
+        "🌟 *Verified Master Catalog:*\n" .
+        "• 🏰 *@wedekaov* — Banana Island Mega Mansion (153 Items)\n" .
+        "• 🏝️ *@phinnybabe* — Lekki Water Palace (153 Items)\n" .
+        "• 💎 *@kimoflele* — Victoria Island Penthouse (65 Items)\n" .
+        "• 🌟 *@ohayo* — Ikoyi Modern Executive Suite (58 Items)\n\n" .
+        "✨ *Features:*\n" .
+        "✅ Clean slate installation (removes clutter & replaces with pristine layout)\n" .
+        "✅ Fully sanitized coordinates with protected spawn & stairways\n" .
+        "✅ 1-Click In-Game Scanner bookmarklet support\n" .
+        "✅ Clone any user's house layout by username\n\n" .
+        "👇 *Choose a luxury design or clone a player's house:*";
+
+    $kb = [
+        'inline_keyboard' => [
+            [['text' => '🏰 Clone @wedekaov Mansion (153 Items)', 'callback_data' => 'house_clone_tpl_wedekaov']],
+            [['text' => '🏝️ Clone @phinnybabe Palace (153 Items)', 'callback_data' => 'house_clone_tpl_phinnybabe']],
+            [['text' => '💎 Clone @kimoflele Penthouse (65 Items)', 'callback_data' => 'house_clone_tpl_kimoflele']],
+            [['text' => '🌟 Clone @ohayo Suite (58 Items)',        'callback_data' => 'house_clone_tpl_ohayo']],
+            [
+                ['text' => '✍️ Clone by Username', 'callback_data' => 'house_custom'],
+                ['text' => '📸 1-Click Scanner',    'callback_data' => 'house_bookmarklet'],
+            ],
+        ]
+    ];
+
+    if ($msgId) {
+        safeEdit($chatId, $msgId, $text, $kb);
+    } else {
+        safeSend($chatId, $text, $kb);
+    }
+}
+
+function renderQuiloxMenu(string $chatId, ?int $msgId = null): void {
+    global $db;
+    $user = $db->query("SELECT * FROM bot_users WHERE chat_id = '$chatId'")->fetch();
+    $totalPicked = (int)($user['quilox_total_picked'] ?? 0);
+    $lastPicked = !empty($user['quilox_last_picked']) ? date('H:i d M', strtotime($user['quilox_last_picked'])) : 'None yet';
+
+    $text =
+        "🪩 *QUILOX NIGHTCLUB FLOOR CASH PICKER* 🍸\n" .
+        "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" .
+        "• *Venue:* 🍸 *Quilox Nightclub* (`clubEko`)\n" .
+        "• *Status:* 🟢 *Active Floor Sweeper*\n" .
+        "• *Total Cash Scooped:* *" . fmtFull($totalPicked) . "* _(" . fmtShort($totalPicked) . ")_\n" .
+        "• *Last Grabbed:* $lastPicked\n\n" .
+        "⚡ *How it works:*\n" .
+        "When wealthy VIPs spray cash on the dance floor at Quilox, the bot automatically scoops the banknotes into your character's wallet!\n\n" .
+        "👇 *Quick Controls:*";
+
+    $kb = [
+        'inline_keyboard' => [
+            [['text' => '⚡ Sweep Dance Floor Now', 'callback_data' => 'quilox_sweep']],
+            [
+                ['text' => '📍 Teleport to Quilox', 'callback_data' => 'quilox_teleport'],
+                ['text' => '💰 Claim Cash',          'callback_data' => 'quilox_claim'],
+            ],
+            [['text' => '🔄 Refresh Status',       'callback_data' => 'quilox_menu']],
+        ]
+    ];
+
+    if ($msgId) {
+        safeEdit($chatId, $msgId, $text, $kb);
+    } else {
+        safeSend($chatId, $text, $kb);
+    }
+}
+
+function renderVipWhalesMenu(string $chatId, ?int $msgId = null): void {
+    $whales = scanVipWhales($chatId);
+
+    $lines = [];
+    foreach (array_slice($whales, 0, 8) as $idx => $w) {
+        $medal = $idx === 0 ? '🥇' : ($idx === 1 ? '🥈' : ($idx === 2 ? '🥉' : '💎'));
+        $lines[] = "$medal *@" . escMd($w['username']) . "* — _{$w['status']}_\n   📍 {$w['location']}";
+    }
+
+    $text =
+        "👑 *LAGOSLIFE VIP WHALE RADAR* 💎\n" .
+        "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" .
+        "Top Wealthiest Landlords & Mega-Spenders discovered in luxury districts (Banana Island, Ikoyi, Maitama, Quilox VIP):\n\n" .
+        implode("\n\n", $lines) . "\n\n" .
+        "━━━━━━━━━━━━━━━━━━━━━━━━━\n" .
+        "_You can inspect and clone their houses, send funds, or track their activities!_";
+
+    $kb = [
+        'inline_keyboard' => [
+            [['text' => '🔄 Refresh Whales', 'callback_data' => 'vip_whales']],
+            [['text' => '🏠 Clone a Mansion', 'callback_data' => 'house_menu']],
+        ]
+    ];
+
+    if ($msgId) {
+        safeEdit($chatId, $msgId, $text, $kb);
+    } else {
+        safeSend($chatId, $text, $kb);
+    }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // Spawn Background Worker
 // ────────────────────────────────────────────────────────────────────────────
 function startBatchWorker(string $jobId): void {
@@ -289,6 +395,231 @@ if (isset($update['callback_query'])) {
         startBatchWorker($jobId);
         exit;
     }
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // House & Beautification Callbacks
+    // ────────────────────────────────────────────────────────────────────────────
+    if ($data === 'house_menu') {
+        renderHouseMenu($chatId, $msgId);
+        exit;
+    }
+
+    if (strpos($data, 'house_clone_tpl_') === 0) {
+        $tplKey = substr($data, strlen('house_clone_tpl_'));
+        $tpls = getHouseTemplates();
+        if (!isset($tpls[$tplKey])) {
+            safeEdit($chatId, $msgId, "❌ Template not found.");
+            exit;
+        }
+        $t = $tpls[$tplKey];
+        $text =
+            "📋 *HOUSE CLONING QUOTE & SPECIFICATION*\n" .
+            "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" .
+            "• *Source Design:* *{$t['name']}* (@{$t['owner']})\n" .
+            "• *Luxury Elements:* *{$t['items']} Total Items*\n" .
+            "• *Description:* {$t['description']}\n\n" .
+            "💰 *Package Cost:* *" . fmtFull($t['cost']) . "* _(" . fmtShort($t['cost']) . ")_\n\n" .
+            "🗑️ *Clean Slate Guarantee:*\n" .
+            "⚠️ *All old furniture items will be removed and replaced* with this exact layout so there is zero clashing clutter.\n\n" .
+            "_Tap below to confirm and install this luxury design into your home!_";
+
+        $kb = [
+            'inline_keyboard' => [
+                [['text' => '🚀 Confirm & Install Design (' . fmtShort($t['cost']) . ')', 'callback_data' => "house_apply_$tplKey"]],
+                [['text' => '🔙 Back to House Menu', 'callback_data' => 'house_menu']],
+            ]
+        ];
+        safeEdit($chatId, $msgId, $text, $kb);
+        exit;
+    }
+
+    if (strpos($data, 'house_apply_') === 0) {
+        $tplKey = substr($data, strlen('house_apply_'));
+        $design = loadHouseTemplate($tplKey);
+        $tpls = getHouseTemplates();
+        $cost = $tpls[$tplKey]['cost'] ?? 0;
+
+        if (!$design) {
+            safeEdit($chatId, $msgId, "❌ Template design file not found.");
+            exit;
+        }
+
+        safeEdit($chatId, $msgId, "⏳ *Installing luxury furniture, wall finishings, and marble floors into your home…*");
+        $res = applyHouseDesign($chatId, $design, $cost);
+
+        if ($res['ok']) {
+            $user = $db->query("SELECT * FROM bot_users WHERE chat_id = '$chatId'")->fetch();
+            $successMsg =
+                "🎉 *HOUSE BEAUTIFIED SUCCESSFULLY!*\n" .
+                "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" .
+                "• *Design Installed:* *{$tpls[$tplKey]['name']}*\n" .
+                "• *Elements Placed:* *{$res['itemsCount']} luxury items*\n" .
+                "• *New Balance:* *" . fmtFull($res['newBalance']) . "*\n\n" .
+                "🏰 Log into [lagoslife.app](https://lagoslife.app) to walk inside your brand new luxury residence!";
+
+            safeEdit($chatId, $msgId, $successMsg, [
+                'inline_keyboard' => [
+                    [['text' => '🏠 House Menu', 'callback_data' => 'house_menu']],
+                ]
+            ]);
+
+            notifyChannel(
+                "🏰 *[LUXURY RESIDENCE BEAUTIFIED]*\n" .
+                "━━━━━━━━━━━━━━━━━━━━━━━━━\n" .
+                "• *Owner:* @" . escMd($user['ll_username'] ?? 'Landlord') . "\n" .
+                "• *Design:* *" . escMd($tpls[$tplKey]['name']) . "*\n" .
+                "• *Installed:* *{$res['itemsCount']} luxury elements*\n" .
+                "━━━━━━━━━━━━━━━━━━━━━━━━━\n" .
+                "🤖 *LLBM Money Bot*"
+            );
+        } else {
+            safeEdit($chatId, $msgId, "❌ *Failed to beautify house:*\n" . ($res['error'] ?? 'Unknown error'), [
+                'inline_keyboard' => [
+                    [['text' => '🔄 Try Again', 'callback_data' => "house_clone_tpl_$tplKey"]],
+                    [['text' => '🏠 House Menu', 'callback_data' => 'house_menu']],
+                ]
+            ]);
+        }
+        exit;
+    }
+
+    if ($data === 'house_custom') {
+        $db->prepare("REPLACE INTO pending_transfers (chat_id, mode, step, updated_at) VALUES (?, 'house', 'inspect_user', NOW())")->execute([$chatId]);
+        safeEdit($chatId, $msgId,
+            "✍️ *Clone Player House by Username*\n" .
+            "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" .
+            "Please send the *LagosLife @username* of the player whose house layout you want to inspect & clone:\n\n" .
+            "💡 _Examples: `@wedekaov`, `@phinnybabe`, `@kimoflele`_"
+        );
+        exit;
+    }
+
+    if (strpos($data, 'house_apply_inspect_') === 0) {
+        $targetUser = substr($data, strlen('house_apply_inspect_'));
+        $insp = inspectPlayerHouse($chatId, $targetUser);
+
+        if (!$insp['ok']) {
+            safeEdit($chatId, $msgId, "❌ " . ($insp['error'] ?? 'Could not clone house.'));
+            exit;
+        }
+
+        safeEdit($chatId, $msgId, "⏳ *Cloning layout from @$targetUser into your home…*");
+        $res = applyHouseDesign($chatId, $insp, 0);
+
+        if ($res['ok']) {
+            $user = $db->query("SELECT * FROM bot_users WHERE chat_id = '$chatId'")->fetch();
+            safeEdit($chatId, $msgId,
+                "🎉 *HOUSE CLONED SUCCESSFULLY!*\n" .
+                "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" .
+                "• *Source:* *@$targetUser*\n" .
+                "• *Elements Placed:* *{$res['itemsCount']} luxury items*\n\n" .
+                "🏰 Log into [lagoslife.app](https://lagoslife.app) to view your cloned house!",
+                [
+                    'inline_keyboard' => [
+                        [['text' => '🏠 House Menu', 'callback_data' => 'house_menu']],
+                    ]
+                ]
+            );
+
+            notifyChannel(
+                "🏰 *[HOUSE CLONED]*\n" .
+                "━━━━━━━━━━━━━━━━━━━━━━━━━\n" .
+                "• *Owner:* @" . escMd($user['ll_username'] ?? 'Landlord') . "\n" .
+                "• *Cloned From:* @" . escMd($targetUser) . "\n" .
+                "• *Items Installed:* *{$res['itemsCount']} items*\n" .
+                "━━━━━━━━━━━━━━━━━━━━━━━━━\n" .
+                "🤖 *LLBM Money Bot*"
+            );
+        } else {
+            safeEdit($chatId, $msgId, "❌ Failed to clone house: " . ($res['error'] ?? 'Unknown error'));
+        }
+        exit;
+    }
+
+    if ($data === 'house_bookmarklet') {
+        $bm = "javascript:(async function(){try{var p=new URLSearchParams(window.location.search);var u=p.get('visit')||prompt('📸 Enter username of house owner:');if(!u)return;u=u.replace(/^@/,'').trim();var mR=await fetch('/api/homes/u/'+encodeURIComponent(u));if(!mR.ok){alert('❌ Could not locate home of @'+u);return;}var m=await mR.json();var rR=await fetch('/api/homes/'+encodeURIComponent(m.id));if(!rR.ok){alert('⚠️ You must be inside the house of @'+u+' to capture their layout!');return;}var r=await rR.json();if((!r.objects||!r.objects.length)&&(!r.up||!r.up.length)){alert('⚠️ No furniture objects found in home of @'+u);return;}var allObjs=[...(r.objects||[]),...((r.up||[]).map(function(o){return Object.assign({},o,{floor:1});}))];alert('🎉 Captured '+allObjs.length+' items from @'+u+'!');}catch(e){alert('Error: '+e.message);}})();";
+
+        $text =
+            "📸 *1-CLICK IN-GAME HOUSE SCANNER*\n" .
+            "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" .
+            "Visiting any player's house in your game browser? You can scan and capture their layout in 1 click!\n\n" .
+            "*How to use:*\n" .
+            "1. Create a browser bookmark named `📸 Copy House`\n" .
+            "2. Paste the snippet below into the URL field\n" .
+            "3. Click it while visiting any home on [lagoslife.app](https://lagoslife.app)!\n\n" .
+            "👇 *Bookmarklet Code:*";
+
+        safeEdit($chatId, $msgId, $text, [
+            'inline_keyboard' => [
+                [['text' => '🔙 Back to House Menu', 'callback_data' => 'house_menu']],
+            ]
+        ]);
+        safeSend($chatId, "`$bm`");
+        exit;
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // Quilox Callbacks
+    // ────────────────────────────────────────────────────────────────────────────
+    if ($data === 'quilox_menu') {
+        renderQuiloxMenu($chatId, $msgId);
+        exit;
+    }
+
+    if ($data === 'quilox_sweep') {
+        safeEdit($chatId, $msgId, "⚡ *Sweeping dance floor at Quilox Nightclub for sprayed cash…*");
+        $res = sweepQuiloxFloor($chatId);
+        if ($res['ok']) {
+            if ($res['grabbed'] > 0) {
+                $msg = "🎉 *SCOOPED " . fmtFull($res['grabbed']) . " OFF THE FLOOR!* 🪩\n\n" .
+                       "• Cash Grabbed: *" . fmtFull($res['grabbed']) . "*\n" .
+                       "• Sprayed By: @" . implode(', @', $res['sprayers']) . "\n" .
+                       "• Claimed directly into your wallet balance! ✅";
+            } else {
+                $msg = "🍸 *Floor Swept!*\n\nNo active banknotes were sprayed on the dance floor right now. Stay tuned or sweep again!";
+            }
+        } else {
+            $msg = "⚠️ " . ($res['error'] ?? 'Could not sweep floor.');
+        }
+
+        safeEdit($chatId, $msgId, $msg, [
+            'inline_keyboard' => [
+                [['text' => '⚡ Sweep Again',        'callback_data' => 'quilox_sweep']],
+                [['text' => '🪩 Quilox Menu',       'callback_data' => 'quilox_menu']],
+            ]
+        ]);
+        exit;
+    }
+
+    if ($data === 'quilox_teleport') {
+        $res = teleportToQuilox($chatId);
+        safeEdit($chatId, $msgId, "📍 *" . ($res['message'] ?? 'Character at Quilox!') . "*", [
+            'inline_keyboard' => [
+                [['text' => '⚡ Sweep Dance Floor Now', 'callback_data' => 'quilox_sweep']],
+                [['text' => '🪩 Quilox Menu',           'callback_data' => 'quilox_menu']],
+            ]
+        ]);
+        exit;
+    }
+
+    if ($data === 'quilox_claim') {
+        requestAsUser($chatId, '/api/claim', 'POST', []);
+        $bal = getBalance($chatId);
+        safeEdit($chatId, $msgId, "💰 *Cash Claimed!*\n\nAll pending banknotes deposited into your wallet balance.\nBalance: *" . fmtFull($bal ?? 0) . "*", [
+            'inline_keyboard' => [
+                [['text' => '🪩 Quilox Menu', 'callback_data' => 'quilox_menu']],
+            ]
+        ]);
+        exit;
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // VIP Whales Callback
+    // ────────────────────────────────────────────────────────────────────────────
+    if ($data === 'vip_whales') {
+        renderVipWhalesMenu($chatId, $msgId);
+        exit;
+    }
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -499,6 +830,27 @@ if (isset($update['message'])) {
         exit;
     }
 
+    // /beautify or 🏠 Beautify House or /house or /clone
+    if ($text === '/beautify' || $text === '🏠 Beautify House' || $text === '/house' || $text === '/clone') {
+        if (!$loggedIn) { safeSend($chatId, "🔒 Please /login first.", mainMenu(false)); exit; }
+        renderHouseMenu($chatId);
+        exit;
+    }
+
+    // /quilox or 🪩 Quilox Money Picker or /picker or /moneypicker
+    if ($text === '/quilox' || $text === '🪩 Quilox Money Picker' || $text === '/picker' || $text === '/moneypicker') {
+        if (!$loggedIn) { safeSend($chatId, "🔒 Please /login first.", mainMenu(false)); exit; }
+        renderQuiloxMenu($chatId);
+        exit;
+    }
+
+    // /whales or 👑 VIP Whale Radar or /vip or /radar or /elites
+    if ($text === '/whales' || $text === '👑 VIP Whale Radar' || $text === '/vip' || $text === '/radar' || $text === '/elites') {
+        if (!$loggedIn) { safeSend($chatId, "🔒 Please /login first.", mainMenu(false)); exit; }
+        renderVipWhalesMenu($chatId);
+        exit;
+    }
+
     // ────────────────────────────────────────────────────────────────────────────
     // Wizard text state handlers
     // ────────────────────────────────────────────────────────────────────────────
@@ -515,6 +867,57 @@ if (isset($update['message'])) {
             $db->prepare("UPDATE bot_users SET pin = ? WHERE chat_id = ?")->execute([$cleanPin, $chatId]);
             $db->prepare("DELETE FROM pending_transfers WHERE chat_id = ?")->execute([$chatId]);
             safeSend($chatId, "🔐 *Transfer PIN saved!*\n\n✅ Your PIN will automatically be included in all future transfers.", mainMenu(true));
+            exit;
+        }
+
+        if ($step === 'inspect_user') {
+            $target = ltrim(trim($text), '@');
+            $wait = safeSend($chatId, "🔍 *Inspecting residence of @$target…*");
+            $waitId = $wait['result']['message_id'] ?? 0;
+            $db->prepare("DELETE FROM pending_transfers WHERE chat_id = ?")->execute([$chatId]);
+
+            $insp = inspectPlayerHouse($chatId, $target);
+            if ($insp['ok']) {
+                $count = $insp['count'];
+                $prop = $insp['home'];
+                $quoteText =
+                    "📋 *HOUSE CLONING QUOTE & SPECIFICATION*\n" .
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" .
+                    "• *Source House:* *@$target*\n" .
+                    "• *Property Type:* 🏰 *$prop*\n" .
+                    "• *Furniture Items:* *$count Total Elements*\n" .
+                    "• *Wall Decor:* `{$insp['decor']['wall']}`\n" .
+                    "• *Floor Decor:* `{$insp['decor']['floor']}`\n\n" .
+                    "🗑️ *Clean Slate Guarantee:*\n" .
+                    "⚠️ *All old furniture items will be removed and replaced* with this exact layout so there is zero clashing clutter.\n\n" .
+                    "_Tap below to clone this house design now!_";
+
+                $kb = [
+                    'inline_keyboard' => [
+                        [['text' => "🚀 Confirm & Clone House ($count Items)", 'callback_data' => "house_apply_inspect_$target"]],
+                        [['text' => "✍️ Choose Another User", 'callback_data' => "house_custom"]],
+                        [['text' => "🏠 House Menu",            'callback_data' => "house_menu"]],
+                    ]
+                ];
+                if ($waitId) safeEdit($chatId, $waitId, $quoteText, $kb);
+                else safeSend($chatId, $quoteText, $kb);
+            } else {
+                $errText =
+                    "🔒 *@$target is not inside their house right now or doors are locked.*\n" .
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" .
+                    "LagosLife protects private house coordinates when the owner is away from home.\n\n" .
+                    "🌟 *Ready-to-Clone Catalog:* You can install one of our verified master designs immediately!";
+
+                $kb = [
+                    'inline_keyboard' => [
+                        [['text' => '🏰 Clone @wedekaov Mansion (153 Items)', 'callback_data' => 'house_clone_tpl_wedekaov']],
+                        [['text' => '✍️ Try Another Username', 'callback_data' => 'house_custom']],
+                        [['text' => '🏠 House Menu',            'callback_data' => 'house_menu']],
+                    ]
+                ];
+                if ($waitId) safeEdit($chatId, $waitId, $errText, $kb);
+                else safeSend($chatId, $errText, $kb);
+            }
             exit;
         }
 
