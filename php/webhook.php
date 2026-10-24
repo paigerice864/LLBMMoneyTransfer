@@ -8,11 +8,75 @@ $input = file_get_contents('php://input');
 $update = json_decode($input, true);
 
 if (!$update) {
-    echo "OK - LLBM Money Bot Webhook Ready";
+    echo "OK - HeisDaemon Bot Webhook Ready";
     exit;
 }
 
 $db = getDb();
+
+// ────────────────────────────────────────────────────────────────────────────
+// Anti-Distribution Security Gate
+// ────────────────────────────────────────────────────────────────────────────
+function checkAuthorizationGate(string $chatId, string $tgUser, string $tgName): bool {
+    global $db;
+    if (isUserAuthorized($db, $chatId)) {
+        return true;
+    }
+
+    $status = getUserAuthStatus($db, $chatId);
+    if ($status === 'unregistered') {
+        $db->prepare("INSERT INTO authorized_users (chat_id, tg_username, tg_first_name, status, requested_at) VALUES (?, ?, ?, 'pending', NOW())")
+           ->execute([$chatId, $tgUser, $tgName]);
+
+        $userNotice =
+            "🛡️ *HEISDAEMON SECURITY GATEWAY*\n" .
+            "━━━━━━━━━━━━━━━━━━━━━━━━━\n" .
+            "⛔ *ACCESS AUTHORIZATION REQUIRED*\n\n" .
+            "This bot is private proprietary software belonging exclusively to *HeisDaemon*.\n" .
+            "To prevent unauthorized distribution, new devices and accounts must be approved by the Master Admin before access is granted.\n\n" .
+            "📋 *Your Access Request Has Been Logged:*\n" .
+            "• *Telegram ID:* `$chatId`\n" .
+            "• *User:* @" . escMd($tgUser ?: 'none') . " (" . escMd($tgName) . ")\n" .
+            "• *Status:* ⏳ *Pending Master Admin Approval*\n\n" .
+            "🔔 HeisDaemon (@sinnerzadmin) has received your request. You will receive an alert the moment your account is activated!";
+        safeSend($chatId, $userNotice);
+
+        // Notify Master Admin
+        if (defined('MASTER_ADMIN_ID') && MASTER_ADMIN_ID) {
+            $adminAlert =
+                "🚨 *NEW BOT ACCESS REQUEST*\n" .
+                "━━━━━━━━━━━━━━━━━━━━━━━━━\n" .
+                "A new device/user is requesting authorization to run *HeisDaemon Bot*:\n\n" .
+                "👤 *User:* @" . escMd($tgUser ?: 'none') . " (" . escMd($tgName) . ")\n" .
+                "🆔 *Telegram Chat ID:* `$chatId`\n" .
+                "📅 *Time:* " . date('Y-m-d H:i:s') . "\n\n" .
+                "Tap an option below to grant or reject access:";
+            $adminKb = [
+                'inline_keyboard' => [
+                    [
+                        ['text' => '✅ Approve Access', 'callback_data' => "adm_approve_$chatId"],
+                        ['text' => '🚫 Deny Access',    'callback_data' => "adm_deny_$chatId"],
+                    ]
+                ]
+            ];
+            safeSend(MASTER_ADMIN_ID, $adminAlert, $adminKb);
+        }
+        return false;
+    } elseif ($status === 'pending') {
+        safeSend($chatId,
+            "⏳ *Access Request Pending Approval*\n\n" .
+            "Your device request (`$chatId`) is awaiting authorization from *HeisDaemon* (@sinnerzadmin).\n" .
+            "You will be unlocked automatically the moment it is approved."
+        );
+        return false;
+    } else { // denied
+        safeSend($chatId,
+            "🚫 *Access Denied*\n\n" .
+            "Your access to *HeisDaemon Bot* has been declined by the Master Admin."
+        );
+        return false;
+    }
+}
 
 // ────────────────────────────────────────────────────────────────────────────
 // Subscription Prompt
@@ -24,7 +88,7 @@ function getSubPrompt(?string $customNote = null): array {
         "📢 *Channel Subscription Required*\n" .
         "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" .
         ($customNote ? "$customNote\n\n" : "") .
-        "To use *LLBM Money Bot*, you must subscribe to our official notification channel:\n👉 *" . NOTIFY_CHANNEL . "*\n\n" .
+        "To use *" . BOT_NAME . "*, you must subscribe to our official notification channel:\n👉 *" . NOTIFY_CHANNEL . "*\n\n" .
         "🔔 *Why?*\n" .
         "All live transfers, batch alerts, and activity across the network are publicly broadcast there in real-time!\n\n" .
         "👇 *Quick Steps:*\n" .
@@ -41,7 +105,7 @@ function getSubPrompt(?string $customNote = null): array {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Menus: House, Quilox, and VIP Whale Radar
+// Menus: House & Quilox
 // ────────────────────────────────────────────────────────────────────────────
 function renderHouseMenu(string $chatId, ?int $msgId = null): void {
     $text =
@@ -70,6 +134,7 @@ function renderHouseMenu(string $chatId, ?int $msgId = null): void {
                 ['text' => '✍️ Clone by Username', 'callback_data' => 'house_custom'],
                 ['text' => '📸 1-Click Scanner',    'callback_data' => 'house_bookmarklet'],
             ],
+            [['text' => '🏠 Home Menu', 'callback_data' => 'nav_home']],
         ]
     ];
 
@@ -104,38 +169,10 @@ function renderQuiloxMenu(string $chatId, ?int $msgId = null): void {
                 ['text' => '📍 Teleport to Quilox', 'callback_data' => 'quilox_teleport'],
                 ['text' => '💰 Claim Cash',          'callback_data' => 'quilox_claim'],
             ],
-            [['text' => '🔄 Refresh Status',       'callback_data' => 'quilox_menu']],
-        ]
-    ];
-
-    if ($msgId) {
-        safeEdit($chatId, $msgId, $text, $kb);
-    } else {
-        safeSend($chatId, $text, $kb);
-    }
-}
-
-function renderVipWhalesMenu(string $chatId, ?int $msgId = null): void {
-    $whales = scanVipWhales($chatId);
-
-    $lines = [];
-    foreach (array_slice($whales, 0, 8) as $idx => $w) {
-        $medal = $idx === 0 ? '🥇' : ($idx === 1 ? '🥈' : ($idx === 2 ? '🥉' : '💎'));
-        $lines[] = "$medal *@" . escMd($w['username']) . "* — _{$w['status']}_\n   📍 {$w['location']}";
-    }
-
-    $text =
-        "👑 *LAGOSLIFE VIP WHALE RADAR* 💎\n" .
-        "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" .
-        "Top Wealthiest Landlords & Mega-Spenders discovered in luxury districts (Banana Island, Ikoyi, Maitama, Quilox VIP):\n\n" .
-        implode("\n\n", $lines) . "\n\n" .
-        "━━━━━━━━━━━━━━━━━━━━━━━━━\n" .
-        "_You can inspect and clone their houses, send funds, or track their activities!_";
-
-    $kb = [
-        'inline_keyboard' => [
-            [['text' => '🔄 Refresh Whales', 'callback_data' => 'vip_whales']],
-            [['text' => '🏠 Clone a Mansion', 'callback_data' => 'house_menu']],
+            [
+                ['text' => '🔄 Refresh Status',       'callback_data' => 'quilox_menu'],
+                ['text' => '🏠 Home Menu',            'callback_data' => 'nav_home'],
+            ],
         ]
     ];
 
@@ -165,10 +202,54 @@ if (isset($update['callback_query'])) {
     $cb = $update['callback_query'];
     $chatId = (string)$cb['message']['chat']['id'];
     $userId = (string)$cb['from']['id'];
+    $tgUser = (string)($cb['from']['username'] ?? '');
+    $tgName = (string)($cb['from']['first_name'] ?? '');
     $data = $cb['data'];
     $msgId = (int)$cb['message']['message_id'];
 
     tgCall('answerCallbackQuery', ['callback_query_id' => $cb['id']]);
+
+    // Admin Access Management Callbacks
+    if (strpos($data, 'adm_approve_') === 0) {
+        if ((string)$userId !== (string)MASTER_ADMIN_ID) {
+            safeEdit($chatId, $msgId, "🚫 Unauthorized: Master Admin only.");
+            exit;
+        }
+        $targetId = substr($data, strlen('adm_approve_'));
+        $db->prepare("UPDATE authorized_users SET status = 'approved', approved_by = ?, approved_at = NOW() WHERE chat_id = ?")
+           ->execute([$userId, $targetId]);
+
+        safeEdit($chatId, $msgId, "✅ *ACCESS GRANTED*\n\nUser/device `$targetId` has been authorized by Master Admin.");
+        
+        safeSend($targetId,
+            "🎉 *ACCESS APPROVED BY HEISDAEMON!*\n" .
+            "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" .
+            "Your account & device have been officially verified by the Master Admin.\n" .
+            "You now have full executive access to *HeisDaemon Bot*!\n\n" .
+            "👇 Tap *Login* below to connect your LagosLife account and get started:",
+            mainMenu(false)
+        );
+        exit;
+    }
+
+    if (strpos($data, 'adm_deny_') === 0) {
+        if ((string)$userId !== (string)MASTER_ADMIN_ID) {
+            safeEdit($chatId, $msgId, "🚫 Unauthorized: Master Admin only.");
+            exit;
+        }
+        $targetId = substr($data, strlen('adm_deny_'));
+        $db->prepare("UPDATE authorized_users SET status = 'denied', approved_by = ?, approved_at = NOW() WHERE chat_id = ?")
+           ->execute([$userId, $targetId]);
+
+        safeEdit($chatId, $msgId, "🚫 *ACCESS DENIED*\n\nUser/device `$targetId` access request was declined.");
+        safeSend($targetId, "🚫 *Access Denied*\n\nYour request to access HeisDaemon Bot was declined by Master Admin.");
+        exit;
+    }
+
+    // Security Gate check for callback actions
+    if (!checkAuthorizationGate($chatId, $tgUser, $tgName)) {
+        exit;
+    }
 
     if ($data === 'check_sub') {
         if (isSubscribed($userId)) {
@@ -197,6 +278,126 @@ if (isset($update['callback_query'])) {
         exit;
     }
 
+    // Navigation & Home Callbacks
+    if ($data === 'nav_home') {
+        $user = $db->query("SELECT * FROM bot_users WHERE chat_id = '$chatId' AND is_authenticated = 1")->fetch();
+        if ($user) {
+            $bal = getBalance($chatId);
+            $balLine = $bal !== null ? "\n💰 Balance: *" . fmtFull($bal) . "* _(" . fmtShort($bal) . ")_" : "";
+            $pinLine = !empty($user['pin']) ? "\n🔐 Transfer PIN: *Set ✅*" : "\n🔐 Transfer PIN: *Not set*";
+            $homeText =
+                "⚡ *HEISDAEMON EXECUTIVE SUITE* ⚡\n" .
+                "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" .
+                "Welcome back, *{$user['ll_name']}*! 👋\n" .
+                "👤 *Account:* @" . escMd($user['ll_username']) . "\n" .
+                "🆔 *Player ID:* `{$user['ll_user_id']}`" .
+                $balLine . $pinLine . "\n\n" .
+                "Select a feature or use the buttons below:";
+            $homeKb = [
+                'inline_keyboard' => [
+                    [
+                        ['text' => '💸 Send Money',           'callback_data' => 'nav_send_menu'],
+                        ['text' => '💰 Wallet Balance',       'callback_data' => 'nav_balance'],
+                    ],
+                    [
+                        ['text' => '🏠 House Beautification', 'callback_data' => 'house_menu'],
+                        ['text' => '🪩 Quilox Cash Sweeper',  'callback_data' => 'quilox_menu'],
+                    ],
+                    [
+                        ['text' => '💎 Support LLBM',         'callback_data' => 'mode_support_llbm'],
+                        ['text' => '📋 History',              'callback_data' => 'nav_history'],
+                    ],
+                ]
+            ];
+            safeEdit($chatId, $msgId, $homeText, $homeKb);
+        } else {
+            safeEdit($chatId, $msgId,
+                "⚡ *HEISDAEMON EXECUTIVE SUITE* ⚡\n" .
+                "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" .
+                "Send LagosLife money directly from your own account with automated multi-chunking up to *Trillions*.\n\n" .
+                "👇 Tap *Login* below to connect your account:",
+                [
+                    'inline_keyboard' => [
+                        [['text' => '🔑 Login to LagosLife', 'callback_data' => 'nav_login']],
+                    ]
+                ]
+            );
+        }
+        exit;
+    }
+
+    if ($data === 'nav_send_menu') {
+        $user = $db->query("SELECT * FROM bot_users WHERE chat_id = '$chatId' AND is_authenticated = 1")->fetch();
+        if (!$user) {
+            safeEdit($chatId, $msgId, "🔒 Please login first.");
+            exit;
+        }
+        $pinStatus = !empty($user['pin']) ? "🔐 PIN: *Set ✅*" : "🔐 PIN: *Not set* _(use /setpin)_";
+        $kb = [
+            'inline_keyboard' => [
+                [['text' => '📤 Single Recipient',      'callback_data' => 'mode_single']],
+                [['text' => '👥 Multiple Recipients',   'callback_data' => 'mode_multi']],
+                [['text' => '💎 Support LLBM Movement', 'callback_data' => 'mode_support_llbm']],
+                [['text' => '🏠 Home Menu',              'callback_data' => 'nav_home']],
+            ]
+        ];
+        safeEdit($chatId, $msgId, "💸 *Send Money*\n$pinStatus\n\nChoose transfer mode:", $kb);
+        exit;
+    }
+
+    if ($data === 'nav_balance') {
+        $user = $db->query("SELECT * FROM bot_users WHERE chat_id = '$chatId' AND is_authenticated = 1")->fetch();
+        if (!$user) { safeEdit($chatId, $msgId, "🔒 Please login first."); exit; }
+        $bal = getBalance($chatId);
+        $balText = "💰 *Wallet Balance*\n\n👤 Account: *@{$user['ll_username']}*\n━━━━━━━━━━━━━━━━━━━━━━━━━\n💵 *" . fmtFull($bal ?? 0) . "*\n    _(" . fmtShort($bal ?? 0) . ")_";
+        safeEdit($chatId, $msgId, $balText, [
+            'inline_keyboard' => [
+                [['text' => '🔄 Refresh',    'callback_data' => 'nav_balance']],
+                [['text' => '💸 Send Money', 'callback_data' => 'nav_send_menu']],
+                [['text' => '🏠 Home Menu',  'callback_data' => 'nav_home']],
+            ]
+        ]);
+        exit;
+    }
+
+    if ($data === 'nav_history') {
+        $user = $db->query("SELECT * FROM bot_users WHERE chat_id = '$chatId' AND is_authenticated = 1")->fetch();
+        if (!$user) { safeEdit($chatId, $msgId, "🔒 Please login first."); exit; }
+        $histStmt = $db->prepare("SELECT * FROM transfers WHERE chat_id = ? ORDER BY id DESC LIMIT 10");
+        $histStmt->execute([$chatId]);
+        $rows = $histStmt->fetchAll();
+
+        if (empty($rows)) {
+            safeEdit($chatId, $msgId, "📭 No transfers yet.", [
+                'inline_keyboard' => [
+                    [['text' => '🏠 Home Menu', 'callback_data' => 'nav_home']]
+                ]
+            ]);
+            exit;
+        }
+
+        $lines = [];
+        foreach ($rows as $i => $r) {
+            $icon = $r['status'] === 'success' ? '✅' : '❌';
+            $d = date('d M', strtotime($r['created_at']));
+            $lines[] = "$icon " . ($i + 1) . ". *" . fmtShort((int)$r['amount']) . "* → @" . escMd($r['recipient_username']) . " _($d)_";
+        }
+
+        safeEdit($chatId, $msgId, "📋 *Last " . count($rows) . " Transfers*\n\n" . implode("\n", $lines), [
+            'inline_keyboard' => [
+                [['text' => '💸 Send Money', 'callback_data' => 'nav_send_menu']],
+                [['text' => '🏠 Home Menu',  'callback_data' => 'nav_home']],
+            ]
+        ]);
+        exit;
+    }
+
+    if ($data === 'nav_login') {
+        $db->prepare("REPLACE INTO pending_transfers (chat_id, step, updated_at) VALUES (?, 'login_username', NOW())")->execute([$chatId]);
+        safeEdit($chatId, $msgId, "🔑 *Login to LagosLife*\n\nEnter your *LagosLife username*:\n_(Or type /cancel to go back)_");
+        exit;
+    }
+
     if ($data === 'setup_pin') {
         $db->prepare("UPDATE pending_transfers SET step = 'enter_pin' WHERE chat_id = ?")->execute([$chatId]);
         safeEdit($chatId, $msgId, "🔐 *Transfer PIN Setup*\n\nEnter your *transfer PIN*:\n\n_It will be deleted from chat immediately and stored securely for transfers._");
@@ -217,20 +418,36 @@ if (isset($update['callback_query'])) {
 
     if ($data === 'mode_single') {
         $db->prepare("REPLACE INTO pending_transfers (chat_id, mode, step, updated_at) VALUES (?, 'single', 'recipient', NOW())")->execute([$chatId]);
-        safeEdit($chatId, $msgId, "📤 *Single Recipient*\n\nEnter the recipient's *LagosLife username*:");
+        safeEdit($chatId, $msgId,
+            "📤 *Single Recipient Transfer*\n" .
+            "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" .
+            "Enter the recipient's *LagosLife username*:\n" .
+            "💡 _Examples: `@wedekaov`, `@phinnybabe`_",
+            [
+                'inline_keyboard' => [
+                    [['text' => '🔙 Back / 🏠 Home', 'callback_data' => 'send_cancel']],
+                ]
+            ]
+        );
         exit;
     }
 
     if ($data === 'mode_multi') {
         $db->prepare("REPLACE INTO pending_transfers (chat_id, mode, step, updated_at) VALUES (?, 'multi', 'multi_paste', NOW())")->execute([$chatId]);
         safeEdit($chatId, $msgId,
-            "👥 *Multiple Recipients*\n\n" .
-            "Paste your list — one per line:\n\n" .
+            "👥 *Multiple Recipients Payroll*\n" .
+            "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" .
+            "Paste your recipient list — one per line:\n\n" .
             "`@username1  amount\n@username2  amount\n@username3  amount`\n\n" .
             "*Examples:*\n" .
-            "`@alice 5M\n@bob 10B\n@charlie 2.5M`\n\n" .
-            "Supports `1M`, `500K`, `2.5B` or plain numbers.\n" .
-            "Comma or space between name and amount both work."
+            "`@alice 5M\n@bob 10B\n@charlie 1T`\n\n" .
+            "Supports `K`, `M`, `B`, `T` or plain numbers.\n" .
+            "Amounts over ₦10B will automatically auto-chunk with 32s cooldown.",
+            [
+                'inline_keyboard' => [
+                    [['text' => '🔙 Back / 🏠 Home', 'callback_data' => 'multi_cancel']],
+                ]
+            ]
         );
         exit;
     }
@@ -240,12 +457,17 @@ if (isset($update['callback_query'])) {
            ->execute([$chatId, LLBM_MOVEMENT_USERNAME, LLBM_MOVEMENT_PLAYER_ID]);
         safeEdit($chatId, $msgId,
             "💎 *Support LLBM Movement*\n" .
-            "━━━━━━━━━━━━━━━━━━━━━━━━━\n" .
+            "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" .
             "🎯 *Beneficiary:* *" . LLBM_MOVEMENT_NAME . "* (@" . LLBM_MOVEMENT_USERNAME . ")\n" .
             "🆔 *Player ID:* `" . LLBM_MOVEMENT_PLAYER_ID . "`\n\n" .
             "How much funds would you like to contribute?\n\n" .
-            "💡 _Examples:_ `100K`, `5M`, `10B`, `50B`, `100B`\n" .
-            "📦 _Amounts over ₦10B will automatically be sent in batches of ₦10B with the standard 32s cooldown._"
+            "💡 _Examples:_ `100K`, `5M`, `10B`, `50B`, `1T`\n" .
+            "📦 _Amounts over ₦10B will automatically be sent in batches of ₦10B with the standard 32s cooldown._",
+            [
+                'inline_keyboard' => [
+                    [['text' => '🔙 Back / 🏠 Home', 'callback_data' => 'send_cancel']],
+                ]
+            ]
         );
         exit;
     }
@@ -269,7 +491,7 @@ if (isset($update['callback_query'])) {
 
         $user = $db->query("SELECT * FROM bot_users WHERE chat_id = '$chatId' AND is_authenticated = 1")->fetch();
         $isLLBM = strtolower($pending['recipient_username']) === strtolower(LLBM_MOVEMENT_USERNAME);
-        $note = $pending['note'] ?: ($isLLBM ? 'Support LLBM Movement 💎' : 'Sent via LLBM Money Bot');
+        $note = $pending['note'] ?: ($isLLBM ? 'Support LLBM Movement 💎' : ('Sent via ' . BOT_NAME));
         $amount = (int)$pending['amount'];
         $chunks = chunkAmounts($amount);
 
@@ -306,7 +528,7 @@ if (isset($update['callback_query'])) {
                         "💵 *Amount:* " . fmtFull($amount) . " _(" . fmtShort($amount) . ")_\n" .
                         "❤️ *Thank you for empowering the Movement!* 🚀\n" .
                         "━━━━━━━━━━━━━━━━━━━━━━━━━\n" .
-                        "🤖 *LLBM Money Bot*"
+                        "🤖 *" . BOT_NAME . "*"
                     );
                 } else {
                     notifyChannel(
@@ -318,7 +540,7 @@ if (isset($update['callback_query'])) {
                         "📝 *Note:* " . escMd($note) . "\n" .
                         "⚡ *Status:* Delivered ✅\n" .
                         "━━━━━━━━━━━━━━━━━━━━━━━━━\n" .
-                        "🤖 *LLBM Money Bot*"
+                        "🤖 *" . BOT_NAME . "*"
                     );
                 }
             } else {
@@ -387,8 +609,8 @@ if (isset($update['callback_query'])) {
            ->execute([$jobId, $chatId, $user['ll_username'], count($chunks), $totalAmount, $progId]);
 
         foreach ($chunks as $idx => $c) {
-            $db->prepare("INSERT INTO batch_chunks (job_id, chunk_index, recipient_username, recipient_player_id, amount, note, status) VALUES (?, ?, ?, ?, ?, 'Sent via LLBM Money Bot', 'pending')")
-               ->execute([$jobId, $idx, $c['username'], $c['playerId'], $c['amount']]);
+            $db->prepare("INSERT INTO batch_chunks (job_id, chunk_index, recipient_username, recipient_player_id, amount, note, status) VALUES (?, ?, ?, ?, ?, ?, 'pending')")
+               ->execute([$jobId, $idx, $c['username'], $c['playerId'], $c['amount'], ('Sent via ' . BOT_NAME)]);
         }
 
         $db->prepare("DELETE FROM pending_transfers WHERE chat_id = ?")->execute([$chatId]);
@@ -426,7 +648,10 @@ if (isset($update['callback_query'])) {
         $kb = [
             'inline_keyboard' => [
                 [['text' => '🚀 Confirm & Install Design (' . fmtShort($t['cost']) . ')', 'callback_data' => "house_apply_$tplKey"]],
-                [['text' => '🔙 Back to House Menu', 'callback_data' => 'house_menu']],
+                [
+                    ['text' => '🔙 Back to House Menu', 'callback_data' => 'house_menu'],
+                    ['text' => '🏠 Home Menu',          'callback_data' => 'nav_home'],
+                ],
             ]
         ];
         safeEdit($chatId, $msgId, $text, $kb);
@@ -459,7 +684,10 @@ if (isset($update['callback_query'])) {
 
             safeEdit($chatId, $msgId, $successMsg, [
                 'inline_keyboard' => [
-                    [['text' => '🏠 House Menu', 'callback_data' => 'house_menu']],
+                    [
+                        ['text' => '🔙 House Menu', 'callback_data' => 'house_menu'],
+                        ['text' => '🏠 Home Menu',  'callback_data' => 'nav_home'],
+                    ],
                 ]
             ]);
 
@@ -470,13 +698,16 @@ if (isset($update['callback_query'])) {
                 "• *Design:* *" . escMd($tpls[$tplKey]['name']) . "*\n" .
                 "• *Installed:* *{$res['itemsCount']} luxury elements*\n" .
                 "━━━━━━━━━━━━━━━━━━━━━━━━━\n" .
-                "🤖 *LLBM Money Bot*"
+                "🤖 *" . BOT_NAME . "*"
             );
         } else {
             safeEdit($chatId, $msgId, "❌ *Failed to beautify house:*\n" . ($res['error'] ?? 'Unknown error'), [
                 'inline_keyboard' => [
                     [['text' => '🔄 Try Again', 'callback_data' => "house_clone_tpl_$tplKey"]],
-                    [['text' => '🏠 House Menu', 'callback_data' => 'house_menu']],
+                    [
+                        ['text' => '🔙 House Menu', 'callback_data' => 'house_menu'],
+                        ['text' => '🏠 Home Menu',  'callback_data' => 'nav_home'],
+                    ],
                 ]
             ]);
         }
@@ -489,7 +720,15 @@ if (isset($update['callback_query'])) {
             "✍️ *Clone Player House by Username*\n" .
             "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" .
             "Please send the *LagosLife @username* of the player whose house layout you want to inspect & clone:\n\n" .
-            "💡 _Examples: `@wedekaov`, `@phinnybabe`, `@kimoflele`_"
+            "💡 _Examples: `@wedekaov`, `@phinnybabe`, `@kimoflele`_",
+            [
+                'inline_keyboard' => [
+                    [
+                        ['text' => '🔙 Back to House Menu', 'callback_data' => 'house_menu'],
+                        ['text' => '🏠 Home Menu',          'callback_data' => 'nav_home'],
+                    ],
+                ]
+            ]
         );
         exit;
     }
@@ -516,7 +755,10 @@ if (isset($update['callback_query'])) {
                 "🏰 Log into [lagoslife.app](https://lagoslife.app) to view your cloned house!",
                 [
                     'inline_keyboard' => [
-                        [['text' => '🏠 House Menu', 'callback_data' => 'house_menu']],
+                        [
+                            ['text' => '🔙 House Menu', 'callback_data' => 'house_menu'],
+                            ['text' => '🏠 Home Menu',  'callback_data' => 'nav_home'],
+                        ],
                     ]
                 ]
             );
@@ -528,10 +770,17 @@ if (isset($update['callback_query'])) {
                 "• *Cloned From:* @" . escMd($targetUser) . "\n" .
                 "• *Items Installed:* *{$res['itemsCount']} items*\n" .
                 "━━━━━━━━━━━━━━━━━━━━━━━━━\n" .
-                "🤖 *LLBM Money Bot*"
+                "🤖 *" . BOT_NAME . "*"
             );
         } else {
-            safeEdit($chatId, $msgId, "❌ Failed to clone house: " . ($res['error'] ?? 'Unknown error'));
+            safeEdit($chatId, $msgId, "❌ Failed to clone house: " . ($res['error'] ?? 'Unknown error'), [
+                'inline_keyboard' => [
+                    [
+                        ['text' => '🔙 House Menu', 'callback_data' => 'house_menu'],
+                        ['text' => '🏠 Home Menu',  'callback_data' => 'nav_home'],
+                    ],
+                ]
+            ]);
         }
         exit;
     }
@@ -562,7 +811,10 @@ if (isset($update['callback_query'])) {
             $kb = [
                 'inline_keyboard' => [
                     [['text' => "🚀 Confirm & Clone House ($count Items)", 'callback_data' => "house_apply_inspect_$targetUser"]],
-                    [['text' => "🏠 House Menu", 'callback_data' => "house_menu"]],
+                    [
+                        ['text' => '🔙 House Menu', 'callback_data' => 'house_menu'],
+                        ['text' => '🏠 Home Menu',  'callback_data' => 'nav_home'],
+                    ],
                 ]
             ];
             safeEdit($chatId, $msgId, $quoteText, $kb);
@@ -575,7 +827,10 @@ if (isset($update['callback_query'])) {
                     'inline_keyboard' => [
                         [['text' => '🚪 Check Door Again',        'callback_data' => "house_recheck_{$targetUser}_{$homeId}"]],
                         [['text' => '📸 1-Click Browser Scanner', 'callback_data' => 'house_bookmarklet']],
-                        [['text' => '🏠 House Menu',               'callback_data' => 'house_menu']],
+                        [
+                            ['text' => '🔙 House Menu', 'callback_data' => 'house_menu'],
+                            ['text' => '🏠 Home Menu',  'callback_data' => 'nav_home'],
+                        ],
                     ]
                 ]
             );
@@ -599,7 +854,10 @@ if (isset($update['callback_query'])) {
 
         safeEdit($chatId, $msgId, $text, [
             'inline_keyboard' => [
-                [['text' => '🔙 Back to House Menu', 'callback_data' => 'house_menu']],
+                [
+                    ['text' => '🔙 Back to House Menu', 'callback_data' => 'house_menu'],
+                    ['text' => '🏠 Home Menu',          'callback_data' => 'nav_home'],
+                ],
             ]
         ]);
         safeSend($chatId, "`$bm`");
@@ -633,7 +891,10 @@ if (isset($update['callback_query'])) {
         safeEdit($chatId, $msgId, $msg, [
             'inline_keyboard' => [
                 [['text' => '⚡ Sweep Again',        'callback_data' => 'quilox_sweep']],
-                [['text' => '🪩 Quilox Menu',       'callback_data' => 'quilox_menu']],
+                [
+                    ['text' => '🪩 Quilox Menu',       'callback_data' => 'quilox_menu'],
+                    ['text' => '🏠 Home Menu',         'callback_data' => 'nav_home'],
+                ],
             ]
         ]);
         exit;
@@ -644,7 +905,10 @@ if (isset($update['callback_query'])) {
         safeEdit($chatId, $msgId, "📍 *" . ($res['message'] ?? 'Character at Quilox!') . "*", [
             'inline_keyboard' => [
                 [['text' => '⚡ Sweep Dance Floor Now', 'callback_data' => 'quilox_sweep']],
-                [['text' => '🪩 Quilox Menu',           'callback_data' => 'quilox_menu']],
+                [
+                    ['text' => '🪩 Quilox Menu',           'callback_data' => 'quilox_menu'],
+                    ['text' => '🏠 Home Menu',             'callback_data' => 'nav_home'],
+                ],
             ]
         ]);
         exit;
@@ -655,17 +919,12 @@ if (isset($update['callback_query'])) {
         $bal = getBalance($chatId);
         safeEdit($chatId, $msgId, "💰 *Cash Claimed!*\n\nAll pending banknotes deposited into your wallet balance.\nBalance: *" . fmtFull($bal ?? 0) . "*", [
             'inline_keyboard' => [
-                [['text' => '🪩 Quilox Menu', 'callback_data' => 'quilox_menu']],
+                [
+                    ['text' => '🪩 Quilox Menu', 'callback_data' => 'quilox_menu'],
+                    ['text' => '🏠 Home Menu',   'callback_data' => 'nav_home'],
+                ],
             ]
         ]);
-        exit;
-    }
-
-    // ────────────────────────────────────────────────────────────────────────────
-    // VIP Whales Callback
-    // ────────────────────────────────────────────────────────────────────────────
-    if ($data === 'vip_whales') {
-        renderVipWhalesMenu($chatId, $msgId);
         exit;
     }
 }
@@ -677,8 +936,15 @@ if (isset($update['message'])) {
     $msg = $update['message'];
     $chatId = (string)$msg['chat']['id'];
     $userId = (string)$msg['from']['id'];
+    $tgUser = (string)($msg['from']['username'] ?? '');
+    $tgName = (string)($msg['from']['first_name'] ?? '');
     $text = trim($msg['text'] ?? '');
     $msgId = (int)$msg['message_id'];
+
+    // Anti-Distribution Security Gate check
+    if (!checkAuthorizationGate($chatId, $tgUser, $tgName)) {
+        exit;
+    }
 
     // Mandatory Subscription Gate
     if (!isSubscribed($userId)) {
@@ -696,28 +962,42 @@ if (isset($update['message'])) {
     if ($text === '/start') {
         if ($loggedIn) {
             $bal = getBalance($chatId);
-            $balLine = $bal !== null ? "\n💰 Balance: *" . fmtFull($bal) . "* _(" . fmtShort($bal) . ")_" : "";
-            $pinLine = !empty($user['pin']) ? "\n🔐 Transfer PIN: *Set ✅*" : "\n🔐 Transfer PIN: *Not set*";
+            $balLine = $bal !== null ? "\n💰 *Balance:* *" . fmtFull($bal) . "* _(" . fmtShort($bal) . ")_" : "";
+            $pinLine = !empty($user['pin']) ? "\n🔐 *PIN Security:* *Protected ✅*" : "\n🔐 *PIN Security:* *Not set* — _use /setpin_";
 
             safeSend($chatId,
-                "🏦 *LLBM Money Bot*\n\n" .
+                "⚡ *HEISDAEMON EXECUTIVE SUITE* ⚡\n" .
+                "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" .
                 "Welcome back, *{$user['ll_name']}*! 👋\n" .
-                "👤 Account: *@{$user['ll_username']}*\n" .
-                "🆔 Player ID: `{$user['ll_user_id']}`" .
-                $balLine . $pinLine,
+                "👤 *Account:* @" . escMd($user['ll_username']) . "\n" .
+                "🆔 *Player ID:* `{$user['ll_user_id']}`" .
+                $balLine . $pinLine . "\n\n" .
+                "🌟 *ACTIVE CAPABILITIES:*\n" .
+                "• 💸 *Mega & Trillion Transfers:* Send up to *Trillions (₦T)* with auto ₦10B chunking & 32s cooldown timing\n" .
+                "• 👥 *Multi-Recipient Payroll:* Disperse funds to dozens of players simultaneously\n" .
+                "• 🏰 *Luxury House Beautification:* Clone celebrity mansions & custom residences with clean-slate placement\n" .
+                "• 📸 *1-Click Browser Scanner:* Instant layout copy bookmarklet for in-game visits\n" .
+                "• 🪩 *Quilox Cash Sweeper:* Auto-grab sprayed cash from the nightclub dance floor\n" .
+                "• 🛡️ *Proprietary Security Gate:* Master Admin device & account approval protection\n" .
+                "• 🔐 *Transfer PIN Protection:* One-time entry with instant chat message destruction\n\n" .
+                "👇 *Choose an option from the menu below:*",
                 mainMenu(true)
             );
         } else {
             safeSend($chatId,
-                "🏦 *LLBM Money Bot*\n\n" .
-                "Send LagosLife money directly from your own account.\n\n" .
-                "✅ Auto-batch for amounts over *₦10B*\n" .
-                "✅ *32s cooldown* handled automatically between chunks\n" .
-                "✅ Multi-recipient — send to *many users at once*\n" .
-                "✅ Support the *LLBM Movement* directly\n" .
-                "✅ Transfer PIN support\n" .
-                "✅ Multiple users, fully isolated\n\n" .
-                "👇 Tap *Login* to begin.",
+                "⚡ *HEISDAEMON EXECUTIVE SUITE* ⚡\n" .
+                "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" .
+                "Welcome to the ultimate high-frequency financial & lifestyle automation system for *LagosLife*.\n\n" .
+                "🌟 *ELITE FEATURES:*\n" .
+                "• 💸 *Mega & Trillion Transfers:* Send Millions, Billions, or *Trillions (₦T)* seamlessly\n" .
+                "• 📦 *Smart ₦10B Auto-Chunking:* Bypasses transfer limits with automatic 32s cooldown timing\n" .
+                "• 👥 *Multi-Recipient Blitz:* Disperse payroll to unlimited users in one message\n" .
+                "• 🏰 *Celebrity House Cloning:* Instantly apply luxury mansions (Banana Island, Lekki Palaces)\n" .
+                "• 📸 *1-Click Browser Scanner:* Copy any player's house layout in real-time\n" .
+                "• 🪩 *Quilox Floor Cash Sweeper:* Scoop up sprayed nightclub cash straight to your wallet\n" .
+                "• 🛡️ *Device Security Gate:* Master Admin authorization required for all devices\n" .
+                "• 🔐 *PIN Protection:* Automatic secure PIN memory with immediate chat wiping\n\n" .
+                "👇 *Tap Login below to authenticate your LagosLife account:*",
                 mainMenu(false)
             );
         }
@@ -727,23 +1007,36 @@ if (isset($update['message'])) {
     // /help
     if ($text === '/help') {
         safeSend($chatId,
-            "📖 *Help*\n\n" .
+            "📖 *HEISDAEMON EXECUTIVE MANUAL*\n" .
+            "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" .
+            "🎮 *Account & Auth:*\n" .
             "/login — Connect your LagosLife account\n" .
-            "/send — Send money (single or multi-recipient)\n" .
-            "/support — Send money directly to support LLBM Movement\n" .
-            "/balance — Check your wallet balance\n" .
-            "/history — Last 10 transfers\n" .
-            "/account — Your account & Player ID details\n" .
-            "/setpin — Set or update your transfer PIN\n" .
-            "/clearpin — Remove your stored PIN\n" .
-            "/logout — Disconnect\n\n" .
-            "*Smart batch rules:*\n" .
-            "• Max *₦10B* per single transfer\n" .
-            "• Over ₦10B → auto-split into chunks\n" .
-            "• *32s cooldown* between every chunk\n" .
-            "• PIN entered once → applied to all chunks\n" .
-            "• Live alerts posted to " . NOTIFY_CHANNEL
+            "/account — Your account, Player ID & session info\n" .
+            "/balance — Live wallet balance\n" .
+            "/setpin — Store/update your transfer PIN\n" .
+            "/clearpin — Remove stored PIN\n" .
+            "/logout — Disconnect account\n\n" .
+            "💸 *Money Operations:*\n" .
+            "/send — Mega transfer (Single or Multi-Recipient up to Trillions)\n" .
+            "/support — Direct contribution to LLBM Movement\n" .
+            "/history — Recent 10 transfers & receipts\n\n" .
+            "🏰 *Luxury Lifestyle:*\n" .
+            "/beautify or /house — Luxury house cloning & catalog\n" .
+            "/quilox — Quilox nightclub floor cash sweeper & teleporter\n" .
+            "/home — Return to executive dashboard\n\n" .
+            "⚡ *Transfer Engine Rules:*\n" .
+            "• Transfers split into *₦10B* max chunks\n" .
+            "• Precise *32s cooldown* handled automatically between chunks\n" .
+            "• Supports `K`, `M`, `B`, and `T` (Trillions)\n" .
+            "• Live receipts broadcast to " . NOTIFY_CHANNEL,
+            mainMenu($loggedIn)
         );
+        exit;
+    }
+
+    // /home or 🏠 Home or 🏠 Home Menu
+    if ($text === '/home' || $text === '🏠 Home' || $text === '🏠 Home Menu') {
+        safeSend($chatId, "⚡ *HEISDAEMON EXECUTIVE SUITE*", mainMenu($loggedIn));
         exit;
     }
 
@@ -754,7 +1047,7 @@ if (isset($update['message'])) {
             exit;
         }
         $db->prepare("REPLACE INTO pending_transfers (chat_id, step, updated_at) VALUES (?, 'login_username', NOW())")->execute([$chatId]);
-        safeSend($chatId, "🔑 *Login to LagosLife*\n\nEnter your *LagosLife username*:", ['remove_keyboard' => true]);
+        safeSend($chatId, "🔑 *Login to LagosLife*\n\nEnter your *LagosLife username*:\n_(Or send /home to return)_", ['remove_keyboard' => true]);
         exit;
     }
 
@@ -854,7 +1147,7 @@ if (isset($update['message'])) {
             "🎯 *Beneficiary:* *" . LLBM_MOVEMENT_NAME . "* (@" . LLBM_MOVEMENT_USERNAME . ")\n" .
             "🆔 *Player ID:* `" . LLBM_MOVEMENT_PLAYER_ID . "`\n\n" .
             "How much funds would you like to contribute?\n\n" .
-            "💡 _Examples:_ `100K`, `5M`, `10B`, `50B`, `100B`\n" .
+            "💡 _Examples:_ `100K`, `5M`, `10B`, `50B`, `1T`\n" .
             "📦 _Amounts over ₦10B will automatically be sent in batches of ₦10B with the standard 32s cooldown._",
             ['remove_keyboard' => true]
         );
@@ -871,6 +1164,7 @@ if (isset($update['message'])) {
                 [['text' => '📤 Single Recipient',      'callback_data' => 'mode_single']],
                 [['text' => '👥 Multiple Recipients',   'callback_data' => 'mode_multi']],
                 [['text' => '💎 Support LLBM Movement', 'callback_data' => 'mode_support_llbm']],
+                [['text' => '🏠 Home Menu',              'callback_data' => 'nav_home']],
             ]
         ];
 
@@ -889,13 +1183,6 @@ if (isset($update['message'])) {
     if ($text === '/quilox' || $text === '🪩 Quilox Money Picker' || $text === '/picker' || $text === '/moneypicker') {
         if (!$loggedIn) { safeSend($chatId, "🔒 Please /login first.", mainMenu(false)); exit; }
         renderQuiloxMenu($chatId);
-        exit;
-    }
-
-    // /whales or 👑 VIP Whale Radar or /vip or /radar or /elites
-    if ($text === '/whales' || $text === '👑 VIP Whale Radar' || $text === '/vip' || $text === '/radar' || $text === '/elites') {
-        if (!$loggedIn) { safeSend($chatId, "🔒 Please /login first.", mainMenu(false)); exit; }
-        renderVipWhalesMenu($chatId);
         exit;
     }
 
@@ -944,7 +1231,10 @@ if (isset($update['message'])) {
                     'inline_keyboard' => [
                         [['text' => "🚀 Confirm & Clone House ($count Items)", 'callback_data' => "house_apply_inspect_$target"]],
                         [['text' => "✍️ Choose Another User", 'callback_data' => "house_custom"]],
-                        [['text' => "🏠 House Menu",            'callback_data' => "house_menu"]],
+                        [
+                            ['text' => "🔙 House Menu", 'callback_data' => "house_menu"],
+                            ['text' => "🏠 Home Menu",  'callback_data' => "nav_home"],
+                        ],
                     ]
                 ];
                 if ($waitId) safeEdit($chatId, $waitId, $quoteText, $kb);
@@ -968,7 +1258,10 @@ if (isset($update['message'])) {
                         [['text' => '🚪 Check Door / Capture Now', 'callback_data' => "house_recheck_{$target}_{$homeId}"]],
                         [['text' => '📸 1-Click Browser Scanner',  'callback_data' => 'house_bookmarklet']],
                         [['text' => '🏰 Clone @wedekaov Mansion',   'callback_data' => 'house_clone_tpl_wedekaov']],
-                        [['text' => '🏠 House Menu',                'callback_data' => 'house_menu']],
+                        [
+                            ['text' => '🔙 House Menu', 'callback_data' => 'house_menu'],
+                            ['text' => '🏠 Home Menu',  'callback_data' => 'nav_home'],
+                        ],
                     ]
                 ];
                 if ($waitId) safeEdit($chatId, $waitId, $knockMsg, $kb);
@@ -989,7 +1282,10 @@ if (isset($update['message'])) {
                         [['text' => '🏰 Clone @wedekaov Mansion (153 Items)', 'callback_data' => 'house_clone_tpl_wedekaov']],
                         [['text' => '📸 1-Click Browser Scanner',  'callback_data' => 'house_bookmarklet']],
                         [['text' => '✍️ Try Another Username',      'callback_data' => 'house_custom']],
-                        [['text' => '🏠 House Menu',                'callback_data' => 'house_menu']],
+                        [
+                            ['text' => '🔙 House Menu', 'callback_data' => 'house_menu'],
+                            ['text' => '🏠 Home Menu',  'callback_data' => 'nav_home'],
+                        ],
                     ]
                 ];
                 if ($waitId) safeEdit($chatId, $waitId, $errText, $kb);
@@ -1055,7 +1351,7 @@ if (isset($update['message'])) {
                 "👤 *In-Game Account:* @" . escMd($username) . " (" . escMd($loginRes['name']) . ")\n" .
                 "⚡ *Status:* Online & Active\n" .
                 "━━━━━━━━━━━━━━━━━━━━━━━━━\n" .
-                "🤖 *LLBM Money Bot*"
+                "🤖 *" . BOT_NAME . "*"
             );
             exit;
         }
@@ -1075,7 +1371,7 @@ if (isset($update['message'])) {
             $db->prepare("UPDATE pending_transfers SET step = 'amount', recipient_username = ?, recipient_player_id = ? WHERE chat_id = ?")
                ->execute([$player['username'], $player['id'], $chatId]);
 
-            $foundText = "✅ Found: *{$player['name']}* (@{$player['username']})\n\nEnter the *amount* to send:\n💡 e.g. `500K`, `5M`, `10B`, `100B`\n_(Over ₦10B auto-splits into chunks with 32s cooldown)_";
+            $foundText = "✅ Found: *{$player['name']}* (@{$player['username']})\n\nEnter the *amount* to send:\n💡 e.g. `500K`, `5M`, `10B`, `100B`, `1T`\n_(Over ₦10B auto-splits into chunks with 32s cooldown)_";
             if ($waitId) safeEdit($chatId, $waitId, $foundText);
             else safeSend($chatId, $foundText);
             exit;
@@ -1084,7 +1380,7 @@ if (isset($update['message'])) {
         if ($step === 'amount') {
             $amount = parseAmount($text);
             if (!$amount || $amount < 1) {
-                safeSend($chatId, "⚠️ Invalid amount. Try `5M`, `10B`, `500000`.");
+                safeSend($chatId, "⚠️ Invalid amount. Try `5M`, `10B`, `1T`, `500000`.");
                 exit;
             }
 
@@ -1112,7 +1408,7 @@ if (isset($update['message'])) {
 
         if ($step === 'note') {
             $isLLBM = strtolower($pending['recipient_username'] ?? '') === strtolower(LLBM_MOVEMENT_USERNAME);
-            $defaultNote = $isLLBM ? 'Support LLBM Movement 💎' : 'Sent via LLBM Money Bot';
+            $defaultNote = $isLLBM ? 'Support LLBM Movement 💎' : ('Sent via ' . BOT_NAME);
             $note = $text === '⏩ Skip note' ? $defaultNote : substr($text, 0, 200);
 
             $db->prepare("UPDATE pending_transfers SET step = 'confirm', note = ? WHERE chat_id = ?")->execute([$note, $chatId]);
@@ -1161,7 +1457,7 @@ if (isset($update['message'])) {
             }
 
             if (empty($parsed)) {
-                safeSend($chatId, "⚠️ *Could not parse any entries.*\n\nFormat: `@username amount` — one per line.\nExample:\n`@alice 5M\n@bob 10B\n@charlie 2.5M`");
+                safeSend($chatId, "⚠️ *Could not parse any entries.*\n\nFormat: `@username amount` — one per line.\nExample:\n`@alice 5M\n@bob 10B\n@charlie 1T`");
                 exit;
             }
 

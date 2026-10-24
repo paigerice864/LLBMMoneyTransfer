@@ -24,9 +24,10 @@ function escMd(?string $text): string {
 }
 
 function fmtShort(int $n): string {
-    if ($n >= 1000000000) return '₦' . round($n / 1000000000, 2) . 'B';
-    if ($n >= 1000000)     return '₦' . round($n / 1000000, 1) . 'M';
-    if ($n >= 1000)        return '₦' . round($n / 1000, 1) . 'K';
+    if ($n >= 1000000000000) return '₦' . round($n / 1000000000000, 2) . 'T';
+    if ($n >= 1000000000)    return '₦' . round($n / 1000000000, 2) . 'B';
+    if ($n >= 1000000)       return '₦' . round($n / 1000000, 1) . 'M';
+    if ($n >= 1000)          return '₦' . round($n / 1000, 1) . 'K';
     return '₦' . number_format($n);
 }
 
@@ -42,12 +43,17 @@ function progressBar(int $done, int $total, int $width = 12): string {
 
 function parseAmount(string $raw): ?int {
     $clean = strtolower(str_replace(',', '', trim($raw)));
-    if (!preg_match('/^([\d.]+)\s*([kmb]?)$/', $clean, $m)) {
+    if (!preg_match('/^([\d.]+)\s*([kmbt]?)$/', $clean, $m)) {
         return null;
     }
     $val = (float)$m[1];
     if ($val <= 0) return null;
-    $mult = ['k' => 1000, 'm' => 1000000, 'b' => 1000000000];
+    $mult = [
+        'k' => 1000,
+        'm' => 1000000,
+        'b' => 1000000000,
+        't' => 1000000000000, // 1 Trillion
+    ];
     $multiplier = isset($m[2]) && isset($mult[$m[2]]) ? $mult[$m[2]] : 1;
     return (int)round($val * $multiplier);
 }
@@ -136,9 +142,9 @@ function mainMenu(bool $loggedIn): array {
             'keyboard' => [
                 [['text' => '💸 Send Money'],       ['text' => '💰 My Balance']],
                 [['text' => '🏠 Beautify House'],   ['text' => '🪩 Quilox Money Picker']],
-                [['text' => '👑 VIP Whale Radar'],  ['text' => '💎 Support LLBM']],
-                [['text' => '📋 Transfer History'], ['text' => '👤 My Account']],
-                [['text' => '🔐 Set/Update PIN'],   ['text' => '🔓 Logout']],
+                [['text' => '💎 Support LLBM'],     ['text' => '📋 Transfer History']],
+                [['text' => '👤 My Account'],       ['text' => '🔐 Set/Update PIN']],
+                [['text' => '🔓 Logout']],
             ],
             'resize_keyboard' => true,
         ];

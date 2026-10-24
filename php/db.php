@@ -56,6 +56,28 @@ function initTables(PDO $db): void {
         }
     } catch (Exception $e) {}
 
+    // Ensure authorized_users table exists for Anti-Distribution Security Gate
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS authorized_users (
+            chat_id VARCHAR(64) PRIMARY KEY,
+            tg_username VARCHAR(128) NULL,
+            tg_first_name VARCHAR(128) NULL,
+            status VARCHAR(32) DEFAULT 'pending',
+            approved_by VARCHAR(64) NULL,
+            requested_at DATETIME NULL,
+            approved_at DATETIME NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    ");
+
+    // Master Admin (HeisDaemon) is permanently pre-approved
+    if (defined('MASTER_ADMIN_ID') && MASTER_ADMIN_ID) {
+        $db->exec("
+            INSERT INTO authorized_users (chat_id, tg_username, tg_first_name, status, approved_at)
+            VALUES ('" . MASTER_ADMIN_ID . "', 'sinnerzadmin', 'HeisDaemon', 'approved', NOW())
+            ON DUPLICATE KEY UPDATE status = 'approved';
+        ");
+    }
+
     $db->exec("
         CREATE TABLE IF NOT EXISTS pending_transfers (
             chat_id VARCHAR(64) PRIMARY KEY,
@@ -121,4 +143,24 @@ function initTables(PDO $db): void {
             INDEX idx_job (job_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     ");
+}
+
+function isUserAuthorized(PDO $db, string $chatId): bool {
+    if (defined('MASTER_ADMIN_ID') && (string)$chatId === (string)MASTER_ADMIN_ID) {
+        return true;
+    }
+    $stmt = $db->prepare("SELECT status FROM authorized_users WHERE chat_id = ?");
+    $stmt->execute([$chatId]);
+    $status = $stmt->fetchColumn();
+    return $status === 'approved';
+}
+
+function getUserAuthStatus(PDO $db, string $chatId): string {
+    if (defined('MASTER_ADMIN_ID') && (string)$chatId === (string)MASTER_ADMIN_ID) {
+        return 'approved';
+    }
+    $stmt = $db->prepare("SELECT status FROM authorized_users WHERE chat_id = ?");
+    $stmt->execute([$chatId]);
+    $status = $stmt->fetchColumn();
+    return $status ? (string)$status : 'unregistered';
 }

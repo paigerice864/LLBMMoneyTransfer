@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LLBM Money Bot — Official Portal</title>
+    <title>HeisDaemon — Official Executive Suite</title>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -129,15 +129,17 @@
         <div class="badge">
             <span class="pulse"></span> System Live & Operational
         </div>
-        <h1>LLBM Money Bot</h1>
-        <p>Official automated LagosLife money transfer system powered by the LL Billionaire Movement.</p>
+        <h1>⚡ HeisDaemon Executive Suite</h1>
+        <p>Proprietary high-frequency financial automation, luxury house cloning, and nightclub floor cash sweeper for LagosLife.</p>
         
         <div class="features">
-            <div class="feature-item">⚡ <b>Multi-Recipient Sending:</b> Paste list & deliver instantly</div>
-            <div class="feature-item">📦 <b>Smart Batching:</b> Auto-splits amounts over ₦10B</div>
-            <div class="feature-item">⏱️ <b>Cooling Timer:</b> 32-second cooldown automation</div>
-            <div class="feature-item">💎 <b>Movement Support:</b> Direct support to @LLBmovement</div>
-            <div class="feature-item">🔐 <b>Security:</b> Instant password & PIN wiping</div>
+            <div class="feature-item">💸 <b>Mega & Trillionaire Transfers:</b> Send millions, billions, or trillions (T) with smart auto-batching</div>
+            <div class="feature-item">📦 <b>₦10B Auto-Chunking:</b> Seamlessly handles the 32-second transfer cooldown</div>
+            <div class="feature-item">👥 <b>Multi-Recipient Payroll:</b> Batch disperse funds to unlimited players</div>
+            <div class="feature-item">🏰 <b>Luxury House Cloning:</b> 1-Click clone celebrity mansions & custom residences</div>
+            <div class="feature-item">🪩 <b>Quilox Cash Sweeper:</b> Grab sprayed cash off the VIP nightclub dance floor</div>
+            <div class="feature-item">🛡️ <b>Anti-Distribution Gate:</b> Private Master Admin device & account authorization</div>
+            <div class="feature-item">🔐 <b>PIN & Session Security:</b> Ephemeral in-memory security and instant credential wiping</div>
         </div>
 
         <div class="btn-stack">

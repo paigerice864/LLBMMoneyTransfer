@@ -62,7 +62,7 @@ for ($i = $doneChunks; $i < $totalChunks; $i++) {
     $recipientUsername = $c['recipient_username'];
     $recipientPlayerId = $c['recipient_player_id'];
     $chunkAmount = (int)$c['amount'];
-    $note = $c['note'] ?: 'Sent via LLBM Money Bot';
+    $note = $c['note'] ?: ('Sent via ' . BOT_NAME);
 
     // Show sending status
     $bar = progressBar($i, $totalChunks);
@@ -186,7 +186,7 @@ if ($isLLBM) {
         "📦 *Chunks:* $totalChunks (Delivered: $successChunks)\n" .
         "❤️ *Thank you for empowering the Movement!* 🚀\n" .
         "━━━━━━━━━━━━━━━━━━━━━━━━━\n" .
-        "🤖 *LLBM Money Bot*"
+        "🤖 *" . BOT_NAME . "*"
     );
 } else {
     notifyChannel(
@@ -199,6 +199,6 @@ if ($isLLBM) {
         $channelFailedSection . "\n" .
         "⚡ *Status:* " . ($failedChunks === 0 ? "All Delivered ✅" : "Completed with issues ⚠️") . "\n" .
         "━━━━━━━━━━━━━━━━━━━━━━━━━\n" .
-        "🤖 *LLBM Money Bot*"
+        "🤖 *" . BOT_NAME . "*"
     );
 }
