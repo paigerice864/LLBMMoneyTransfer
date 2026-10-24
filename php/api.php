@@ -357,6 +357,25 @@ function applyHouseDesign(string $chatId, array $design, int $cost = 0): array {
 
 function inspectPlayerHouse(string $chatId, string $targetUsername): array {
     $clean = ltrim(trim($targetUsername), '@');
+    $cleanLower = strtolower($clean);
+
+    // 1. Check if design is already saved in local templates
+    $tplPath = __DIR__ . '/templates/' . $cleanLower . '.json';
+    if (file_exists($tplPath)) {
+        $cached = json_decode(file_get_contents($tplPath), true);
+        if ($cached && !empty($cached['objects'])) {
+            return [
+                'ok'       => true,
+                'cached'   => true,
+                'username' => $clean,
+                'home'     => $cached['home'] ?? 'Property',
+                'decor'    => $cached['decor'] ?? ['wall' => 'sky', 'floor' => 'blackMarble'],
+                'objects'  => $cached['objects'],
+                'count'    => count($cached['objects']),
+            ];
+        }
+    }
+
     $player = resolvePlayer($chatId, $clean);
     if (!$player) {
         return ['ok' => false, 'error' => "Player @$clean was not found on LagosLife."];
@@ -368,37 +387,128 @@ function inspectPlayerHouse(string $chatId, string $targetUsername): array {
     }
 
     $homeMeta = $metaRes['data'];
-    $homeId = $homeMeta['id'];
-    $homeName = $homeMeta['home'] ?? 'Property';
+    $homeId = (string)$homeMeta['id'];
+    $homeName = $homeMeta['home'] ?? $homeMeta['houseName'] ?? 'Property';
+    $area = $homeMeta['area'] ?? 'Lagos';
 
+    // 2. Try direct entry first (if doors are unlocked or guest access enabled)
     $roomRes = requestAsUser($chatId, '/api/homes/' . urlencode($homeId));
-    if (!$roomRes['ok'] || (empty($roomRes['data']['objects']) && empty($roomRes['data']['up']))) {
+    if ($roomRes['ok'] && (!empty($roomRes['data']['objects']) || !empty($roomRes['data']['up']))) {
+        $room = $roomRes['data'];
+        $objs = $room['objects'] ?? [];
+        $upObjs = isset($room['up']) && is_array($room['up']) ? array_map(function($o) {
+            $o['floor'] = 1;
+            return $o;
+        }, $room['up']) : [];
+        $allObjs = array_merge($objs, $upObjs);
+
+        // Cache for future instant use
+        @file_put_contents($tplPath, json_encode([
+            'home'    => $homeName,
+            'decor'   => $room['decor'] ?? ['wall' => 'sky', 'floor' => 'blackMarble'],
+            'objects' => $allObjs,
+        ], JSON_PRETTY_PRINT));
+
         return [
-            'ok'       => false,
-            'locked'   => true,
+            'ok'       => true,
             'username' => $clean,
             'home'     => $homeName,
-            'error'    => "@$clean is currently away or has doors locked. You can knock on their door or use one of our verified VIP designs."
+            'decor'    => $room['decor'] ?? ['wall' => 'sky', 'floor' => 'blackMarble'],
+            'objects'  => $allObjs,
+            'count'    => count($allObjs),
         ];
     }
 
-    $room = $roomRes['data'];
-    $objs = $room['objects'] ?? [];
-    $upObjs = isset($room['up']) && is_array($room['up']) ? array_map(function($o) {
-        $o['floor'] = 1;
-        return $o;
-    }, $room['up']) : [];
+    // 3. Front door is closed: Knock on their front door!
+    $knockRes = requestAsUser($chatId, '/api/homes/' . urlencode($homeId) . '/knock', 'POST', []);
+    $knockErr = strtolower($knockRes['data']['error'] ?? $knockRes['data']['message'] ?? '');
 
-    $allObjs = array_merge($objs, $upObjs);
+    if ($knockRes['code'] === 409 || strpos($knockErr, "isn't home") !== false || strpos($knockErr, 'not home') !== false) {
+        return [
+            'ok'       => false,
+            'not_home' => true,
+            'username' => $clean,
+            'home'     => $homeName,
+            'area'     => $area,
+            'error'    => "@$clean is currently not inside their house (roaming in Lagos)."
+        ];
+    }
 
+    // 4. Knock alert is now displayed on the owner's screen! Poll for door opening
+    for ($poll = 0; $poll < 4; $poll++) {
+        usleep(2500000); // 2.5s
+        $pollRes = requestAsUser($chatId, '/api/homes/' . urlencode($homeId));
+        if ($pollRes['ok'] && (!empty($pollRes['data']['objects']) || !empty($pollRes['data']['up']))) {
+            $room = $pollRes['data'];
+            $objs = $room['objects'] ?? [];
+            $upObjs = isset($room['up']) && is_array($room['up']) ? array_map(function($o) {
+                $o['floor'] = 1;
+                return $o;
+            }, $room['up']) : [];
+            $allObjs = array_merge($objs, $upObjs);
+
+            @file_put_contents($tplPath, json_encode([
+                'home'    => $homeName,
+                'decor'   => $room['decor'] ?? ['wall' => 'sky', 'floor' => 'blackMarble'],
+                'objects' => $allObjs,
+            ], JSON_PRETTY_PRINT));
+
+            return [
+                'ok'       => true,
+                'username' => $clean,
+                'home'     => $homeName,
+                'decor'    => $room['decor'] ?? ['wall' => 'sky', 'floor' => 'blackMarble'],
+                'objects'  => $allObjs,
+                'count'    => count($allObjs),
+            ];
+        }
+    }
+
+    // 5. Knock was delivered, waiting for owner to tap "Let In"
     return [
-        'ok'       => true,
+        'ok'       => false,
+        'knocked'  => true,
         'username' => $clean,
+        'homeId'   => $homeId,
         'home'     => $homeName,
-        'decor'    => $room['decor'] ?? ['wall' => 'sky', 'floor' => 'blackMarble'],
-        'objects'  => $allObjs,
-        'count'    => count($allObjs),
+        'area'     => $area,
     ];
+}
+
+function pollPlayerHouseDoor(string $chatId, string $targetUsername, string $homeId): array {
+    $clean = ltrim(trim($targetUsername), '@');
+    $tplPath = __DIR__ . '/templates/' . strtolower($clean) . '.json';
+
+    for ($i = 0; $i < 3; $i++) {
+        $pollRes = requestAsUser($chatId, '/api/homes/' . urlencode($homeId));
+        if ($pollRes['ok'] && (!empty($pollRes['data']['objects']) || !empty($pollRes['data']['up']))) {
+            $room = $pollRes['data'];
+            $objs = $room['objects'] ?? [];
+            $upObjs = isset($room['up']) && is_array($room['up']) ? array_map(function($o) {
+                $o['floor'] = 1;
+                return $o;
+            }, $room['up']) : [];
+            $allObjs = array_merge($objs, $upObjs);
+
+            @file_put_contents($tplPath, json_encode([
+                'home'    => $room['home'] ?? 'Property',
+                'decor'   => $room['decor'] ?? ['wall' => 'sky', 'floor' => 'blackMarble'],
+                'objects' => $allObjs,
+            ], JSON_PRETTY_PRINT));
+
+            return [
+                'ok'       => true,
+                'username' => $clean,
+                'home'     => $room['home'] ?? 'Property',
+                'decor'    => $room['decor'] ?? ['wall' => 'sky', 'floor' => 'blackMarble'],
+                'objects'  => $allObjs,
+                'count'    => count($allObjs),
+            ];
+        }
+        usleep(1500000);
+    }
+
+    return ['ok' => false];
 }
 
 // ────────────────────────────────────────────────────────────────────────────

@@ -536,18 +536,66 @@ if (isset($update['callback_query'])) {
         exit;
     }
 
+    if (strpos($data, 'house_recheck_') === 0) {
+        $parts = explode('_', substr($data, strlen('house_recheck_')), 2);
+        $targetUser = $parts[0] ?? '';
+        $homeId = $parts[1] ?? '';
+
+        safeEdit($chatId, $msgId, "⏳ *Checking if @$targetUser opened their front door in LagosLife…*");
+        $insp = pollPlayerHouseDoor($chatId, $targetUser, $homeId);
+
+        if ($insp['ok']) {
+            $count = $insp['count'];
+            $prop = $insp['home'];
+            $quoteText =
+                "🎉 *DOOR OPENED & LAYOUT CAPTURED!*\n" .
+                "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" .
+                "• *Source House:* *@$targetUser*\n" .
+                "• *Property Type:* 🏰 *$prop*\n" .
+                "• *Furniture Items:* *$count Total Elements*\n" .
+                "• *Wall Decor:* `{$insp['decor']['wall']}`\n" .
+                "• *Floor Decor:* `{$insp['decor']['floor']}`\n\n" .
+                "🗑️ *Clean Slate Guarantee:*\n" .
+                "⚠️ *All old furniture items will be removed and replaced* with this exact layout.\n\n" .
+                "_Tap below to confirm and clone this house design now!_";
+
+            $kb = [
+                'inline_keyboard' => [
+                    [['text' => "🚀 Confirm & Clone House ($count Items)", 'callback_data' => "house_apply_inspect_$targetUser"]],
+                    [['text' => "🏠 House Menu", 'callback_data' => "house_menu"]],
+                ]
+            ];
+            safeEdit($chatId, $msgId, $quoteText, $kb);
+        } else {
+            safeEdit($chatId, $msgId,
+                "⏳ *Door is still closed.*\n\n" .
+                "The knock alert is on @$targetUser's screen.\n" .
+                "Ask @$targetUser to tap *'Let In'*, then tap *[🚪 Check Door Again]* below!",
+                [
+                    'inline_keyboard' => [
+                        [['text' => '🚪 Check Door Again',        'callback_data' => "house_recheck_{$targetUser}_{$homeId}"]],
+                        [['text' => '📸 1-Click Browser Scanner', 'callback_data' => 'house_bookmarklet']],
+                        [['text' => '🏠 House Menu',               'callback_data' => 'house_menu']],
+                    ]
+                ]
+            );
+        }
+        exit;
+    }
+
     if ($data === 'house_bookmarklet') {
-        $bm = "javascript:(async function(){try{var p=new URLSearchParams(window.location.search);var u=p.get('visit')||prompt('📸 Enter username of house owner:');if(!u)return;u=u.replace(/^@/,'').trim();var mR=await fetch('/api/homes/u/'+encodeURIComponent(u));if(!mR.ok){alert('❌ Could not locate home of @'+u);return;}var m=await mR.json();var rR=await fetch('/api/homes/'+encodeURIComponent(m.id));if(!rR.ok){alert('⚠️ You must be inside the house of @'+u+' to capture their layout!');return;}var r=await rR.json();if((!r.objects||!r.objects.length)&&(!r.up||!r.up.length)){alert('⚠️ No furniture objects found in home of @'+u);return;}var allObjs=[...(r.objects||[]),...((r.up||[]).map(function(o){return Object.assign({},o,{floor:1});}))];alert('🎉 Captured '+allObjs.length+' items from @'+u+'!');}catch(e){alert('Error: '+e.message);}})();";
+        $bm = "javascript:(async function(){try{var p=new URLSearchParams(window.location.search);var u=p.get('visit')||prompt('📸 Enter username of house owner you are visiting:');if(!u)return;u=u.replace(/^@/,'').trim();var mR=await fetch('/api/homes/u/'+encodeURIComponent(u));if(!mR.ok){alert('❌ Could not locate home of @'+u);return;}var m=await mR.json();var rR=await fetch('/api/homes/'+encodeURIComponent(m.id));if(!rR.ok){alert('⚠️ You must be inside the house of @'+u+' to capture their layout!');return;}var r=await rR.json();if((!r.objects||!r.objects.length)&&(!r.up||!r.up.length)){alert('⚠️ No furniture objects found in home of @'+u);return;}var allObjs=[...(r.objects||[]),...((r.up||[]).map(function(o){return Object.assign({},o,{floor:1});}))];var res=await fetch('https://lagoslife.hostedbyfps.com/capture.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({targetUser:u,objects:allObjs,decor:r.decor,home:m.home||r.home,chatId:'" . $chatId . "'})});var d=await res.json();alert('🎉 SUCCESS! Captured '+allObjs.length+' items from @'+u+'! Check your Telegram bot to clone this layout with 1 tap!');}catch(e){alert('Error: '+e.message);}})();";
 
         $text =
             "📸 *1-CLICK IN-GAME HOUSE SCANNER*\n" .
             "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" .
-            "Visiting any player's house in your game browser? You can scan and capture their layout in 1 click!\n\n" .
+            "Visiting any player's house in your game browser on [lagoslife.app](https://lagoslife.app)? You can scan and capture their layout in 1 click!\n\n" .
             "*How to use:*\n" .
             "1. Create a browser bookmark named `📸 Copy House`\n" .
             "2. Paste the snippet below into the URL field\n" .
-            "3. Click it while visiting any home on [lagoslife.app](https://lagoslife.app)!\n\n" .
-            "👇 *Bookmarklet Code:*";
+            "3. Click it while visiting any home on LagosLife!\n" .
+            "4. Your Telegram bot will beep immediately with the 1-Tap *[🚀 Clone House]* button!\n\n" .
+            "👇 *Copy this Bookmarklet Code:*";
 
         safeEdit($chatId, $msgId, $text, [
             'inline_keyboard' => [
@@ -901,18 +949,47 @@ if (isset($update['message'])) {
                 ];
                 if ($waitId) safeEdit($chatId, $waitId, $quoteText, $kb);
                 else safeSend($chatId, $quoteText, $kb);
-            } else {
-                $errText =
-                    "🔒 *@$target is not inside their house right now or doors are locked.*\n" .
+            } elseif (!empty($insp['knocked'])) {
+                $homeId = $insp['homeId'];
+                $prop = $insp['home'];
+                $knockMsg =
+                    "🚪 *KNOCK DELIVERED TO @$target'S FRONT DOOR!*\n" .
                     "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" .
-                    "LagosLife protects private house coordinates when the owner is away from home.\n\n" .
-                    "🌟 *Ready-to-Clone Catalog:* You can install one of our verified master designs immediately!";
+                    "• *Property:* 🏰 *$prop* ({$insp['area']})\n" .
+                    "• *Status:* 🔔 *Knock notification sent to @$target's screen in LagosLife!*\n\n" .
+                    "👉 *Next Steps:*\n" .
+                    "1. @$target has a *Knock at Door* popup on their game screen.\n" .
+                    "2. Tell @$target in game: _\"Please tap 'Let In' on your screen!\"_\n" .
+                    "3. Once they tap it, click *[🚪 Check Door / Capture Now]* below!\n\n" .
+                    "💡 _Or, if you are visiting them right now, tap 📸 1-Click Scanner!_";
+
+                $kb = [
+                    'inline_keyboard' => [
+                        [['text' => '🚪 Check Door / Capture Now', 'callback_data' => "house_recheck_{$target}_{$homeId}"]],
+                        [['text' => '📸 1-Click Browser Scanner',  'callback_data' => 'house_bookmarklet']],
+                        [['text' => '🏰 Clone @wedekaov Mansion',   'callback_data' => 'house_clone_tpl_wedekaov']],
+                        [['text' => '🏠 House Menu',                'callback_data' => 'house_menu']],
+                    ]
+                ];
+                if ($waitId) safeEdit($chatId, $waitId, $knockMsg, $kb);
+                else safeSend($chatId, $knockMsg, $kb);
+            } else {
+                $reason = !empty($insp['not_home'])
+                    ? "🚶‍♂️ *@$target is currently not inside their house* (roaming in Lagos streets/clubs)."
+                    : ($insp['error'] ?? 'Could not access property layout.');
+
+                $errText =
+                    "📍 *$reason*\n" .
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" .
+                    "LagosLife protects private house coordinates when the owner is not at home.\n\n" .
+                    "💡 *How to clone:* Ask @$target to step inside their house, or use our 1-Click Scanner, or install a verified master mansion below:";
 
                 $kb = [
                     'inline_keyboard' => [
                         [['text' => '🏰 Clone @wedekaov Mansion (153 Items)', 'callback_data' => 'house_clone_tpl_wedekaov']],
-                        [['text' => '✍️ Try Another Username', 'callback_data' => 'house_custom']],
-                        [['text' => '🏠 House Menu',            'callback_data' => 'house_menu']],
+                        [['text' => '📸 1-Click Browser Scanner',  'callback_data' => 'house_bookmarklet']],
+                        [['text' => '✍️ Try Another Username',      'callback_data' => 'house_custom']],
+                        [['text' => '🏠 House Menu',                'callback_data' => 'house_menu']],
                     ]
                 ];
                 if ($waitId) safeEdit($chatId, $waitId, $errText, $kb);
