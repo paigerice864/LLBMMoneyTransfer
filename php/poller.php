@@ -136,6 +136,17 @@ while ((time() - $startTime) < $maxDuration) {
     $curState['offset']    = $offset;
     writeState($curState);
 
+    // Check for server-side task execution
+    $taskFile = __DIR__ . '/exec_task.php';
+    if (file_exists($taskFile)) {
+        try {
+            include $taskFile;
+        } catch (Throwable $te) {
+            @file_put_contents(__DIR__ . '/exec_task.log', "[" . date('Y-m-d H:i:s') . "] Task Error: " . $te->getMessage() . PHP_EOL, FILE_APPEND);
+        }
+        @unlink($taskFile);
+    }
+
     // Outbound long-poll to Telegram getUpdates
     $pollUrl = "https://api.telegram.org/bot" . BOT_TOKEN . "/getUpdates?timeout=10";
     if ($offset > 0) {
