@@ -13,7 +13,6 @@ $historyLog = __DIR__ . '/poller_history.log';
 $authKey = $_GET['key'] ?? ($_GET['auth'] ?? ($_POST['key'] ?? ''));
 $isMaster = ($authKey === (string)MASTER_ADMIN_ID || $authKey === 'Akorede@1' || $authKey === 'heisdaemon');
 
-// Function to trigger poller asynchronously
 function spawnPoller(): void {
     $url = "https://lagoslife.hostedbyfps.com/poller.php?spawn=" . time();
     $ch = curl_init($url);
@@ -69,11 +68,12 @@ $action = $_GET['action'] ?? ($_POST['action'] ?? null);
 if ($action) {
     header('Content-Type: application/json');
 
-    // Cron Trigger (External 24/7 pings)
+    // Cron Trigger
     if ($action === 'cron') {
         $state = getPollerData();
         if (!$state['is_alive']) {
             @unlink($stopFile);
+            tgCall('deleteWebhook');
             spawnPoller();
             echo json_encode(['ok' => true, 'action' => 'revived', 'timestamp' => date('c')]);
         } else {
@@ -93,6 +93,7 @@ if ($action) {
         $revived = false;
         if ($auto && !$state['is_alive']) {
             @unlink($stopFile);
+            tgCall('deleteWebhook');
             spawnPoller();
             $revived = true;
         }
@@ -110,7 +111,6 @@ if ($action) {
 
     if ($action === 'stop') {
         @file_put_contents($stopFile, '1');
-        // Update state to stopped
         $state = getPollerData();
         $state['status'] = 'stopped';
         $state['last_action'] = 'Stopped by supervisor user';
@@ -284,7 +284,7 @@ $cronUrl = "https://lagoslife.hostedbyfps.com/supervisor.php?action=cron&key=" .
             margin-bottom: 4px;
         }
         .metric-val {
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 700;
             color: var(--text);
             font-family: 'JetBrains Mono', monospace;
@@ -384,7 +384,7 @@ $cronUrl = "https://lagoslife.hostedbyfps.com/supervisor.php?action=cron&key=" .
             margin-top: 14px;
         }
         .cron-label {
-            font-size: 12px;
+            font-size: 13px;
             font-weight: 700;
             color: var(--accent);
             margin-bottom: 6px;
@@ -518,12 +518,12 @@ $cronUrl = "https://lagoslife.hostedbyfps.com/supervisor.php?action=cron&key=" .
                     <div class="metric-val" id="metricUpdates"><?= number_format($state['total_processed']) ?></div>
                 </div>
                 <div class="metric-box">
-                    <div class="metric-label">Telegram Offset</div>
-                    <div class="metric-val" id="metricOffset"><?= $state['offset'] ?: '0' ?></div>
+                    <div class="metric-label">Server Cron Job</div>
+                    <div class="metric-val" style="font-size: 14px; color: #10b981;">🟢 Active (Every 1m)</div>
                 </div>
                 <div class="metric-box">
-                    <div class="metric-label">Runner Mode</div>
-                    <div class="metric-val" style="font-size: 15px; color: #38bdf8;">Cloud Daemon</div>
+                    <div class="metric-label">Telegram Offset</div>
+                    <div class="metric-val" id="metricOffset"><?= $state['offset'] ?: '0' ?></div>
                 </div>
             </div>
 
@@ -536,7 +536,7 @@ $cronUrl = "https://lagoslife.hostedbyfps.com/supervisor.php?action=cron&key=" .
             <div class="toggle-section">
                 <div class="toggle-text">
                     <span class="toggle-title">📱 Mobile / Browser Keep-Alive</span>
-                    <span class="toggle-desc">Automatically revives the bot if this browser tab is open</span>
+                    <span class="toggle-desc">Automatically maintains the poller while this browser tab is open</span>
                 </div>
                 <label class="switch">
                     <input type="checkbox" id="keepAliveToggle" checked>
@@ -546,14 +546,14 @@ $cronUrl = "https://lagoslife.hostedbyfps.com/supervisor.php?action=cron&key=" .
 
             <div class="cron-box">
                 <div class="cron-label">
-                    <span>🌐 24/7 Cloud Webhook (PC Off Autonomous Uptime)</span>
+                    <span>⚡ Server Crontab Configured on FPS.ms / DirectAdmin</span>
                 </div>
-                <div style="font-size: 12px; color: #94a3b8; margin-bottom: 8px;">
-                    Add this link to any free monitor (e.g. <b>UptimeRobot</b> or <b>cron-job.org</b> every 5m) to keep the bot alive 24/7 without needing any device online:
+                <div style="font-size: 12px; color: #94a3b8; margin-bottom: 8px; line-height: 1.5;">
+                    The background daemon is scheduled to run <b>every minute (*/1 * * * *)</b> on the server. Even if your PC is turned off and your phone browser is closed, the server automatically keeps the bot alive 24/7!
                 </div>
                 <div class="cron-input-row">
                     <input type="text" class="cron-input" readonly value="<?= htmlspecialchars($cronUrl) ?>" id="cronUrlInput">
-                    <button class="btn-copy" onclick="copyCronUrl()">Copy</button>
+                    <button class="btn-copy" onclick="copyCronUrl()">Copy URL</button>
                 </div>
             </div>
         </div>
@@ -631,10 +631,27 @@ $cronUrl = "https://lagoslife.hostedbyfps.com/supervisor.php?action=cron&key=" .
 
         async function controlBot(action) {
             try {
-                const res = await fetch(`supervisor.php?action=${action}`);
-                const data = await res.json();
-                console.log('Action result:', data);
-                setTimeout(pulse, 800);
+                const text = document.getElementById('statusText');
+                if (action === 'start') {
+                    text.innerText = 'STARTING RUNNER...';
+                } else if (action === 'restart') {
+                    text.innerText = 'RESTARTING RUNNER...';
+                } else if (action === 'stop') {
+                    text.innerText = 'STOPPING RUNNER...';
+                }
+
+                // 1. Tell supervisor to clear flags and prepare
+                await fetch(`supervisor.php?action=${action}`);
+
+                // 2. Direct browser trigger (passes Imunify challenge with browser cookies)
+                if (action === 'start' || action === 'restart') {
+                    fetch(`poller.php?web_init=${Date.now()}`).catch(() => {});
+                }
+
+                // 3. Promptly refresh telemetry
+                setTimeout(pulse, 600);
+                setTimeout(pulse, 1500);
+                setTimeout(pulse, 3000);
             } catch (e) {
                 console.error('Control error:', e);
             }
@@ -647,6 +664,10 @@ $cronUrl = "https://lagoslife.hostedbyfps.com/supervisor.php?action=cron&key=" .
                 const json = await res.json();
                 if (json.ok && json.data) {
                     updateUI(json.data);
+                    // If offline and auto-revive is active, also trigger poller.php directly from browser
+                    if (!json.data.is_alive && autoRevive) {
+                        fetch(`poller.php?web_init=${Date.now()}`).catch(() => {});
+                    }
                 }
             } catch (e) {
                 console.error('Pulse error:', e);
@@ -668,8 +689,8 @@ $cronUrl = "https://lagoslife.hostedbyfps.com/supervisor.php?action=cron&key=" .
             alert("24/7 Cloud Webhook URL copied to clipboard!");
         }
 
-        // Run pulse every 8 seconds
-        setInterval(pulse, 8000);
+        // Run pulse every 6 seconds
+        setInterval(pulse, 6000);
     </script>
 </body>
 </html>
