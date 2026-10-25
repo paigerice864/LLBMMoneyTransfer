@@ -11,6 +11,9 @@ require_once __DIR__ . '/bot.php';
 // ────────────────────────────────────────────────────────────────────────────
 function checkAuthorizationGate(string $chatId, string $tgUser, string $tgName): bool {
     global $db;
+    if (!$db) {
+        $db = getDb();
+    }
     if (isUserAuthorized($db, $chatId)) {
         return true;
     }
@@ -100,6 +103,10 @@ function getSubPrompt(?string $customNote = null): array {
 // Menus: House & Quilox
 // ────────────────────────────────────────────────────────────────────────────
 function renderHouseMenu(string $chatId, ?int $msgId = null): void {
+    global $db;
+    if (!$db) {
+        $db = getDb();
+    }
     $text =
         "🏠 *LAGOSLIFE HOUSE BEAUTIFICATION & CLONING*\n" .
         "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" .
@@ -139,6 +146,9 @@ function renderHouseMenu(string $chatId, ?int $msgId = null): void {
 
 function renderQuiloxMenu(string $chatId, ?int $msgId = null): void {
     global $db;
+    if (!$db) {
+        $db = getDb();
+    }
     $user = $db->query("SELECT * FROM bot_users WHERE chat_id = '$chatId'")->fetch();
     $totalPicked = (int)($user['quilox_total_picked'] ?? 0);
     $lastPicked = !empty($user['quilox_last_picked']) ? date('H:i d M', strtotime($user['quilox_last_picked'])) : 'None yet';
@@ -200,7 +210,10 @@ function startBatchWorker(string $jobId): void {
 
 
 function handleTelegramUpdate(array $update): void {
-    $db = getDb();
+    global $db;
+    if (!$db) {
+        $db = getDb();
+    }
     try {
 // ────────────────────────────────────────────────────────────────────────────
 // Handle Callback Queries
@@ -1041,8 +1054,9 @@ if (isset($update['message'])) {
         return;
     }
 
-    // /home or 🏠 Home or 🏠 Home Menu
-    if ($text === '/home' || $text === '🏠 Home' || $text === '🏠 Home Menu') {
+    // /home, /cancel, /back
+    if (in_array(strtolower($text), ['/home', '🏠 home', '🏠 home menu', 'home', '/cancel', 'cancel', '❌ cancel', '/back', 'back', '🔙 back', '🔙 back / 🏠 home'])) {
+        $db->prepare("DELETE FROM pending_transfers WHERE chat_id = ?")->execute([$chatId]);
         safeSend($chatId, "⚡ *HEISDAEMON EXECUTIVE SUITE*", mainMenu($loggedIn));
         return;
     }
@@ -1544,6 +1558,8 @@ if (isset($update['message'])) {
 }
 
     } catch (Throwable $e) {
+        $err = "[" . date('Y-m-d H:i:s') . "] Handler Error: " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine() . PHP_EOL . $e->getTraceAsString() . PHP_EOL;
+        @file_put_contents(__DIR__ . '/handler_errors.log', $err, FILE_APPEND);
         error_log("HeisDaemon Update Handler Error: " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine());
     }
 }

@@ -125,6 +125,9 @@ function notifyChannel(string $text): void {
 }
 
 function isSubscribed(string $userId): bool {
+    if (defined('MASTER_ADMIN_ID') && (string)$userId === (string)MASTER_ADMIN_ID) {
+        return true;
+    }
     $res = tgCall('getChatMember', [
         'chat_id' => NOTIFY_CHANNEL,
         'user_id' => (int)$userId,
@@ -144,14 +147,14 @@ function mainMenu(bool $loggedIn): array {
                 [['text' => '🏠 Beautify House'],   ['text' => '🪩 Quilox Money Picker']],
                 [['text' => '💎 Support LLBM'],     ['text' => '📋 Transfer History']],
                 [['text' => '👤 My Account'],       ['text' => '🔐 Set/Update PIN']],
-                [['text' => '🔓 Logout']],
+                [['text' => '🏠 Home'],             ['text' => '🔓 Logout']],
             ],
             'resize_keyboard' => true,
         ];
     }
     return [
         'keyboard' => [
-            [['text' => '🔑 Login']],
+            [['text' => '🔑 Login'],            ['text' => '🏠 Home']],
         ],
         'resize_keyboard' => true,
     ];

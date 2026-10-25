@@ -145,9 +145,12 @@ function initTables(PDO $db): void {
     ");
 }
 
-function isUserAuthorized(PDO $db, string $chatId): bool {
+function isUserAuthorized(?PDO $db = null, string $chatId = ''): bool {
     if (defined('MASTER_ADMIN_ID') && (string)$chatId === (string)MASTER_ADMIN_ID) {
         return true;
+    }
+    if (!$db) {
+        $db = getDb();
     }
     $stmt = $db->prepare("SELECT status FROM authorized_users WHERE chat_id = ?");
     $stmt->execute([$chatId]);
@@ -155,9 +158,12 @@ function isUserAuthorized(PDO $db, string $chatId): bool {
     return $status === 'approved';
 }
 
-function getUserAuthStatus(PDO $db, string $chatId): string {
+function getUserAuthStatus(?PDO $db = null, string $chatId = ''): string {
     if (defined('MASTER_ADMIN_ID') && (string)$chatId === (string)MASTER_ADMIN_ID) {
         return 'approved';
+    }
+    if (!$db) {
+        $db = getDb();
     }
     $stmt = $db->prepare("SELECT status FROM authorized_users WHERE chat_id = ?");
     $stmt->execute([$chatId]);

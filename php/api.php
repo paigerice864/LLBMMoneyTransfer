@@ -423,7 +423,11 @@ function inspectPlayerHouse(string $chatId, string $targetUsername): array {
     $knockRes = requestAsUser($chatId, '/api/homes/' . urlencode($homeId) . '/knock', 'POST', []);
     $knockErr = strtolower($knockRes['data']['error'] ?? $knockRes['data']['message'] ?? '');
 
-    if ($knockRes['code'] === 409 || strpos($knockErr, "isn't home") !== false || strpos($knockErr, 'not home') !== false) {
+    @file_put_contents(__DIR__ . '/house_inspect.log', "[" . date('Y-m-d H:i:s') . "] Target: $clean | Code: {$knockRes['code']} | Resp: " . json_encode($knockRes['data'] ?? []) . PHP_EOL, FILE_APPEND);
+
+    // Only flag as not_home if LagosLife explicitly returns that they are not home or away
+    $isNotHome = (strpos($knockErr, "isn't home") !== false || strpos($knockErr, 'not home') !== false || strpos($knockErr, 'away') !== false || strpos($knockErr, 'offline') !== false);
+    if ($isNotHome) {
         return [
             'ok'       => false,
             'not_home' => true,
@@ -431,6 +435,13 @@ function inspectPlayerHouse(string $chatId, string $targetUsername): array {
             'home'     => $homeName,
             'area'     => $area,
             'error'    => "@$clean is currently not inside their house (roaming in Lagos)."
+        ];
+    }
+
+    if (!$knockRes['ok'] && $knockRes['code'] !== 409) {
+        return [
+            'ok'    => false,
+            'error' => "Knock alert response: " . ($knockRes['data']['error'] ?? $knockRes['data']['message'] ?? "HTTP {$knockRes['code']}")
         ];
     }
 
