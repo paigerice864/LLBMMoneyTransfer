@@ -630,3 +630,35 @@ function sweepQuiloxFloor(string $chatId): array {
         'sprayers' => array_unique($pickedSprayers),
     ];
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// Spawn Background Batch Worker
+// ────────────────────────────────────────────────────────────────────────────
+if (!function_exists('startBatchWorker')) {
+    function startBatchWorker(string $jobId): void {
+        $script = __DIR__ . '/worker.php';
+        $disabled = explode(',', ini_get('disable_functions') ?: '');
+        $disabled = array_map('trim', $disabled);
+
+        $hasExec = function_exists('exec') && !in_array('exec', $disabled);
+
+        if ($hasExec) {
+            if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+                @pclose(popen("start /B php \"$script\" $jobId", "r"));
+            } else {
+                $phpBin = file_exists('/usr/local/php82/bin/php') ? '/usr/local/php82/bin/php' : 'php';
+                @exec("$phpBin \"$script\" $jobId > /dev/null 2>&1 &");
+            }
+        }
+
+        // Also hit HTTP endpoint to guarantee trigger under all server configs
+        $url = 'https://lagoslife.hostedbyfps.com/worker.php?job_id=' . urlencode($jobId);
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 1);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        @curl_exec($ch);
+        @curl_close($ch);
+    }
+}

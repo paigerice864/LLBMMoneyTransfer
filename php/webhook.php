@@ -188,15 +188,22 @@ function renderQuiloxMenu(string $chatId, ?int $msgId = null): void {
 // ────────────────────────────────────────────────────────────────────────────
 // Spawn Background Worker
 // ────────────────────────────────────────────────────────────────────────────
-function startBatchWorker(string $jobId): void {
-    $script = __DIR__ . '/worker.php';
-    if (function_exists('exec')) {
-        if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-            @pclose(popen("start /B php \"$script\" $jobId", "r"));
-        } else {
-            @exec("php \"$script\" $jobId > /dev/null 2>&1 &");
+if (!function_exists('startBatchWorker')) {
+    function startBatchWorker(string $jobId): void {
+        $script = __DIR__ . '/worker.php';
+        $disabled = explode(',', ini_get('disable_functions') ?: '');
+        $disabled = array_map('trim', $disabled);
+        $hasExec = function_exists('exec') && !in_array('exec', $disabled);
+
+        if ($hasExec) {
+            if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+                @pclose(popen("start /B php \"$script\" $jobId", "r"));
+            } else {
+                $phpBin = file_exists('/usr/local/php82/bin/php') ? '/usr/local/php82/bin/php' : 'php';
+                @exec("$phpBin \"$script\" $jobId > /dev/null 2>&1 &");
+            }
         }
-    } else {
+
         $url = 'https://lagoslife.hostedbyfps.com/worker.php?job_id=' . urlencode($jobId);
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
