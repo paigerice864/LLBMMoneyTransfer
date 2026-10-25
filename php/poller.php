@@ -154,6 +154,13 @@ while ((time() - $startTime) < $maxDuration) {
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
+    if ($httpCode === 409 && strpos($raw, 'deleteWebhook') !== false) {
+        tgCall('deleteWebhook');
+        appendHistoryLog("ℹ️ Webhook cleared on Telegram to enable autonomous polling.");
+        sleep(1);
+        continue;
+    }
+
     if ($raw === false || $httpCode !== 200) {
         $consecutiveErrors++;
         $errMsg = "HTTP $httpCode " . ($curlErr ?: substr($raw ?: '', 0, 100));

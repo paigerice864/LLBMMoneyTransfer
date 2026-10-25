@@ -101,6 +101,7 @@ if ($action) {
 
     if ($action === 'start') {
         @unlink($stopFile);
+        tgCall('deleteWebhook');
         spawnPoller();
         echo json_encode(['ok' => true, 'message' => 'Start signal sent to poller daemon']);
         exit;
@@ -119,6 +120,7 @@ if ($action) {
 
     if ($action === 'restart') {
         @file_put_contents($stopFile, '1');
+        tgCall('deleteWebhook');
         usleep(300000); // 0.3s
         @unlink($stopFile);
         spawnPoller();

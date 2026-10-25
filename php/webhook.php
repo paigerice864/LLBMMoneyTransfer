@@ -1550,6 +1550,7 @@ if (isset($update['message'])) {
 
 if (!defined('IN_POLLER')) {
     $input = file_get_contents('php://input');
+    if (!empty($input)) { @file_put_contents(__DIR__ . '/webhook_traffic.log', '[' . date('Y-m-d H:i:s') . '] ' . substr($input, 0, 300) . PHP_EOL, FILE_APPEND); }
     if (empty($input)) {
         $input = file_get_contents('php://stdin');
     }
