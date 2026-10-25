@@ -3,6 +3,7 @@
 // lagoslife.hostedbyfps.com/supervisor.php
 
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/bot.php';
 
 $stateFile  = __DIR__ . '/poller_state.json';
 $stopFile   = __DIR__ . '/poller.stop';
