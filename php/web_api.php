@@ -628,6 +628,138 @@ try {
         ]);
     }
 
+    // ────────────────────────────────────────────────────────────────────────────
+    // 11. Live Batch Status & Progress Polling
+    // ────────────────────────────────────────────────────────────────────────────
+    if ($action === 'get_batch_status') {
+        $jobId = trim($jsonBody['job_id'] ?? ($_GET['job_id'] ?? ''));
+        if (!$jobId) respond(false, [], 'Missing job_id');
+
+        $stmt = $db->prepare("SELECT * FROM batch_jobs WHERE id = ?");
+        $stmt->execute([$jobId]);
+        $job = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$job) respond(false, [], 'Batch job not found');
+
+        $chunksStmt = $db->prepare("SELECT id, chunk_index, recipient_username, amount, status, error_reason, processed_at FROM batch_chunks WHERE job_id = ? ORDER BY chunk_index ASC");
+        $chunksStmt->execute([$jobId]);
+        $chunks = $chunksStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $totalChunks = (int)$job['total_chunks'];
+        $completedChunks = (int)$job['completed_chunks'];
+        $percent = $totalChunks > 0 ? (int)round(($completedChunks / $totalChunks) * 100) : 0;
+
+        respond(true, [
+            'job' => [
+                'id'               => $job['id'],
+                'sender'           => $job['sender_username'],
+                'mode'             => $job['mode'],
+                'status'           => $job['status'],
+                'total_chunks'     => $totalChunks,
+                'completed_chunks' => $completedChunks,
+                'failed_chunks'    => (int)$job['failed_chunks'],
+                'percent'          => $percent,
+                'total_amount'     => (int)$job['total_amount'],
+                'total_amount_fmt' => fmtFull((int)$job['total_amount']),
+                'total_amount_srt' => fmtShort((int)$job['total_amount']),
+                'sent_amount'      => (int)$job['sent_amount'],
+                'sent_amount_fmt'  => fmtFull((int)$job['sent_amount']),
+                'sent_amount_srt'  => fmtShort((int)$job['sent_amount']),
+                'updated_at'       => $job['updated_at'],
+                'is_done'          => in_array($job['status'], ['completed', 'failed', 'cancelled']),
+            ],
+            'chunks' => $chunks,
+        ]);
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // 12. Cancel Active Batch
+    // ────────────────────────────────────────────────────────────────────────────
+    if ($action === 'cancel_batch') {
+        $jobId = trim($jsonBody['job_id'] ?? ($_POST['job_id'] ?? ''));
+        if (!$jobId) respond(false, [], 'Missing job_id');
+
+        $db->prepare("UPDATE batch_jobs SET status = 'cancelled', updated_at = NOW() WHERE id = ?")->execute([$jobId]);
+        respond(true, ['message' => 'Batch cancellation requested. Current chunk will finalize and halt.']);
+    }
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // 13. Real-Time Activity & Terminal Logs
+    // ────────────────────────────────────────────────────────────────────────────
+    if ($action === 'get_logs') {
+        $logs = [];
+
+        // 1. Pull recent events from transfers table
+        $txStmt = $db->query("SELECT id, sender_ll_username, recipient_username, amount, note, status, error_reason, created_at FROM transfers ORDER BY created_at DESC LIMIT 30");
+        while ($row = $txStmt->fetch(PDO::FETCH_ASSOC)) {
+            $isSuccess = $row['status'] === 'success';
+            $badge = $isSuccess ? 'TRANSFER' : 'FAILED';
+            $color = $isSuccess ? '#10b981' : '#ef4444';
+            $amtFmt = fmtFull((int)$row['amount']) . ' (' . fmtShort((int)$row['amount']) . ')';
+            $desc = $isSuccess 
+                ? "@{$row['sender_ll_username']} sent $amtFmt to @{$row['recipient_username']}"
+                : "Transfer to @{$row['recipient_username']} failed: " . ($row['error_reason'] ?? 'Declined');
+
+            $logs[] = [
+                'time'      => date('H:i:s', strtotime($row['created_at'])),
+                'timestamp' => strtotime($row['created_at']),
+                'type'      => 'transfer',
+                'badge'     => $badge,
+                'color'     => $color,
+                'text'      => $desc,
+            ];
+        }
+
+        // 2. Pull recent batch jobs
+        $bjStmt = $db->query("SELECT id, sender_username, mode, total_chunks, completed_chunks, total_amount, status, created_at, updated_at FROM batch_jobs ORDER BY updated_at DESC LIMIT 10");
+        while ($bj = $bjStmt->fetch(PDO::FETCH_ASSOC)) {
+            $amtFmt = fmtShort((int)$bj['total_amount']);
+            $progress = "{$bj['completed_chunks']}/{$bj['total_chunks']} chunks";
+            $status = strtoupper($bj['status']);
+            $color = ($bj['status'] === 'completed') ? '#10b981' : (($bj['status'] === 'pending') ? '#f59e0b' : '#3b82f6');
+            $logs[] = [
+                'time'      => date('H:i:s', strtotime($bj['updated_at'])),
+                'timestamp' => strtotime($bj['updated_at']),
+                'type'      => 'batch',
+                'badge'     => 'BATCH:' . $status,
+                'color'     => $color,
+                'text'      => "Payroll Job {$bj['id']} (@{$bj['sender_username']}) — $progress ($amtFmt)",
+            ];
+        }
+
+        // 3. Pull recent poller lines if history log exists
+        $histLog = __DIR__ . '/poller_history.log';
+        if (file_exists($histLog)) {
+            $rawLines = array_slice(file($histLog), -25);
+            foreach ($rawLines as $l) {
+                $l = trim($l);
+                if (empty($l)) continue;
+                if (preg_match('/^\[(.*?)\]\s*(.*)$/', $l, $m)) {
+                    $tStr = $m[1];
+                    $tBody = $m[2];
+                    $logs[] = [
+                        'time'      => date('H:i:s', strtotime($tStr)),
+                        'timestamp' => strtotime($tStr),
+                        'type'      => 'system',
+                        'badge'     => 'ENGINE',
+                        'color'     => '#64748b',
+                        'text'      => $tBody,
+                    ];
+                }
+            }
+        }
+
+        // Sort all entries by timestamp descending
+        usort($logs, function($a, $b) {
+            return $b['timestamp'] - $a['timestamp'];
+        });
+
+        respond(true, [
+            'logs' => array_slice($logs, 0, 50),
+            'server_time' => date('H:i:s'),
+        ]);
+    }
+
     respond(false, [], "Unknown action: '$action'");
 } catch (Throwable $e) {
     respond(false, [], "Server Error: " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine());

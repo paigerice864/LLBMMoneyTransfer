@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HeisDaemon — Executive Suite & Web Portal</title>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
             --bg: #090d16;
@@ -14,10 +14,11 @@
             --border: #1e293b;
             --border-accent: rgba(16, 185, 129, 0.3);
             --accent: #10b981;
-            --accent-glow: rgba(16, 185, 129, 0.2);
+            --accent-glow: rgba(16, 185, 129, 0.25);
             --gold: #f59e0b;
-            --gold-glow: rgba(245, 158, 11, 0.15);
+            --gold-glow: rgba(245, 158, 11, 0.2);
             --blue: #3b82f6;
+            --purple: #a855f7;
             --text: #f8fafc;
             --text-muted: #94a3b8;
             --danger: #ef4444;
@@ -30,21 +31,21 @@
             color: var(--text);
             min-height: 100vh;
             line-height: 1.5;
-            padding-bottom: 60px;
+            padding-bottom: 80px;
         }
 
         /* Top Nav */
         header {
-            background: rgba(15, 23, 42, 0.85);
-            backdrop-filter: blur(12px);
+            background: rgba(15, 23, 42, 0.88);
+            backdrop-filter: blur(14px);
             border-bottom: 1px solid var(--border);
             position: sticky;
             top: 0;
             z-index: 50;
-            padding: 16px 24px;
+            padding: 14px 24px;
         }
         .nav-inner {
-            max-width: 1200px;
+            max-width: 1240px;
             margin: 0 auto;
             display: flex;
             align-items: center;
@@ -60,15 +61,15 @@
             color: var(--text);
         }
         .brand-logo {
-            width: 38px;
-            height: 38px;
-            border-radius: 10px;
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
             background: linear-gradient(135deg, #10b981, #059669);
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 20px;
-            box-shadow: 0 4px 12px var(--accent-glow);
+            box-shadow: 0 4px 14px var(--accent-glow);
         }
         .brand-title {
             font-size: 18px;
@@ -119,18 +120,18 @@
 
         /* Container */
         .main-wrap {
-            max-width: 1200px;
-            margin: 28px auto 0;
+            max-width: 1240px;
+            margin: 24px auto 0;
             padding: 0 20px;
         }
 
         /* Hero Banner */
         .hero {
-            background: linear-gradient(135deg, rgba(19, 29, 51, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%);
+            background: linear-gradient(135deg, rgba(19, 29, 51, 0.95) 0%, rgba(15, 23, 42, 0.98) 100%);
             border: 1px solid var(--border);
             border-radius: 20px;
             padding: 24px 28px;
-            margin-bottom: 24px;
+            margin-bottom: 22px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -149,21 +150,21 @@
         }
         .hero-stats {
             display: flex;
-            gap: 20px;
+            gap: 16px;
             flex-wrap: wrap;
         }
         .stat-box {
-            background: rgba(0,0,0,0.25);
+            background: rgba(0,0,0,0.3);
             border: 1px solid var(--border);
             border-radius: 14px;
             padding: 12px 18px;
             min-width: 150px;
         }
         .stat-label {
-            font-size: 12px;
+            font-size: 11px;
             color: var(--text-muted);
             text-transform: uppercase;
-            font-weight: 600;
+            font-weight: 700;
             margin-bottom: 4px;
         }
         .stat-value {
@@ -178,7 +179,7 @@
             display: flex;
             gap: 8px;
             border-bottom: 1px solid var(--border);
-            margin-bottom: 24px;
+            margin-bottom: 22px;
             overflow-x: auto;
             padding-bottom: 4px;
         }
@@ -260,11 +261,6 @@
             border-radius: 16px;
             padding: 18px;
             margin-bottom: 14px;
-            position: relative;
-        }
-        .account-card.active-sender {
-            border-color: var(--accent);
-            box-shadow: 0 0 15px var(--accent-glow);
         }
         .acc-top {
             display: flex;
@@ -324,7 +320,7 @@
         }
         .input-control, select, textarea {
             width: 100%;
-            background: rgba(15, 23, 42, 0.7);
+            background: rgba(15, 23, 42, 0.75);
             border: 1px solid var(--border);
             border-radius: 12px;
             padding: 12px 16px;
@@ -425,7 +421,326 @@
             line-height: 1.4;
         }
 
-        /* Alert Toast */
+        /* ────────────────────────────────────────────────────────────────────────
+           ROLLING BEAUTIFUL PROGRESS MODAL
+           ──────────────────────────────────────────────────────────────────────── */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(3, 7, 18, 0.85);
+            backdrop-filter: blur(8px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+        .progress-card {
+            background: linear-gradient(145deg, #131d35 0%, #0c1424 100%);
+            border: 1px solid rgba(16, 185, 129, 0.4);
+            border-radius: 24px;
+            max-width: 500px;
+            width: 100%;
+            padding: 32px 28px;
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7), 0 0 35px rgba(16, 185, 129, 0.2);
+            text-align: center;
+            position: relative;
+            animation: modalFadeIn 0.3s ease-out;
+        }
+        @keyframes modalFadeIn {
+            from { transform: scale(0.92); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        /* Rolling Orbital Spinner */
+        .orbital-wrapper {
+            position: relative;
+            width: 110px;
+            height: 110px;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .orbital-ring {
+            position: absolute;
+            border-radius: 50%;
+            border-style: solid;
+        }
+        .orbital-ring.outer {
+            width: 100px;
+            height: 100px;
+            border-width: 4px;
+            border-color: rgba(16, 185, 129, 0.15);
+            border-top-color: #10b981;
+            border-right-color: #059669;
+            animation: orbitClockwise 1.4s linear infinite;
+            filter: drop-shadow(0 0 10px rgba(16, 185, 129, 0.6));
+        }
+        .orbital-ring.inner {
+            width: 74px;
+            height: 74px;
+            border-width: 3px;
+            border-color: rgba(245, 158, 11, 0.15);
+            border-bottom-color: #f59e0b;
+            border-left-color: #d97706;
+            animation: orbitCounter 0.9s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+            filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.5));
+        }
+        .orbital-core {
+            font-size: 16px;
+            font-weight: 800;
+            font-family: 'JetBrains Mono', monospace;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-shadow: 0 0 10px rgba(255,255,255,0.5);
+            animation: corePulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes orbitClockwise {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        @keyframes orbitCounter {
+            from { transform: rotate(360deg); }
+            to { transform: rotate(0deg); }
+        }
+        @keyframes corePulse {
+            0%, 100% { transform: scale(1); opacity: 0.9; }
+            50% { transform: scale(1.08); opacity: 1; }
+        }
+
+        .progress-title {
+            font-size: 20px;
+            font-weight: 800;
+            margin-bottom: 6px;
+            letter-spacing: -0.3px;
+        }
+        .progress-subtitle {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 22px;
+            min-height: 20px;
+        }
+
+        /* Rolling Striped Shimmer Bar */
+        .progress-bar-track {
+            background: rgba(0, 0, 0, 0.45);
+            border: 1px solid var(--border);
+            border-radius: 9999px;
+            height: 16px;
+            overflow: hidden;
+            position: relative;
+            margin-bottom: 20px;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.5);
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #10b981 0%, #059669 50%, #10b981 100%);
+            border-radius: 9999px;
+            transition: width 0.4s ease;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.5);
+        }
+        .progress-bar-fill::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: linear-gradient(
+                45deg,
+                rgba(255, 255, 255, 0.22) 25%,
+                transparent 25%,
+                transparent 50%,
+                rgba(255, 255, 255, 0.22) 50%,
+                rgba(255, 255, 255, 0.22) 75%,
+                transparent 75%,
+                transparent
+            );
+            background-size: 32px 32px;
+            animation: rollStripes 0.9s linear infinite;
+        }
+        @keyframes rollStripes {
+            from { background-position: 0 0; }
+            to { background-position: 32px 0; }
+        }
+
+        /* Progress Metrics */
+        .progress-stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 22px;
+        }
+        .p-stat {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 10px;
+        }
+        .p-stat-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            font-weight: 700;
+            margin-bottom: 3px;
+        }
+        .p-stat-val {
+            font-size: 15px;
+            font-weight: 800;
+            color: var(--text);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .prog-actions-row {
+            display: flex;
+            gap: 10px;
+        }
+        .btn-prog-cancel {
+            flex: 1;
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--danger);
+            font-weight: 700;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-prog-cancel:hover {
+            background: rgba(239, 68, 68, 0.25);
+            border-color: var(--danger);
+        }
+        .btn-prog-min {
+            flex: 1;
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: rgba(255,255,255,0.04);
+            color: var(--text-muted);
+            font-weight: 700;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-prog-min:hover {
+            color: var(--text);
+            background: rgba(255,255,255,0.08);
+        }
+
+        /* ────────────────────────────────────────────────────────────────────────
+           LIVE TERMINAL & CONSOLE LOG
+           ──────────────────────────────────────────────────────────────────────── */
+        .terminal-card {
+            background: #06090e;
+            border: 1px solid #1e293b;
+            border-radius: 18px;
+            padding: 0;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            margin-top: 24px;
+        }
+        .terminal-header {
+            background: #0a0f1d;
+            border-bottom: 1px solid #1e293b;
+            padding: 12px 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .terminal-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            color: #cbd5e1;
+        }
+        .term-pulse {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent);
+            box-shadow: 0 0 10px var(--accent);
+            animation: corePulse 1.2s infinite;
+        }
+        .term-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .term-chip {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-size: 11px;
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .term-chip:hover, .term-chip.active {
+            color: var(--accent);
+            border-color: var(--accent);
+            background: rgba(16, 185, 129, 0.12);
+        }
+        .terminal-body {
+            height: 300px;
+            overflow-y: auto;
+            padding: 14px 18px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            line-height: 1.6;
+            color: #94a3b8;
+            scroll-behavior: smooth;
+        }
+        .terminal-body::-webkit-scrollbar {
+            width: 6px;
+        }
+        .terminal-body::-webkit-scrollbar-thumb {
+            background: #1e293b;
+            border-radius: 3px;
+        }
+        .log-row {
+            padding: 3px 0;
+            display: flex;
+            align-items: baseline;
+            gap: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.02);
+            word-break: break-word;
+        }
+        .log-time {
+            color: #475569;
+            flex-shrink: 0;
+            font-size: 11px;
+        }
+        .log-tag {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 1px 6px;
+            border-radius: 4px;
+            flex-shrink: 0;
+            text-transform: uppercase;
+        }
+        .log-tag.transfer { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+        .log-tag.batch    { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+        .log-tag.engine   { background: rgba(100, 116, 139, 0.2); color: #94a3b8; }
+        .log-tag.failed   { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+        .log-tag.bot      { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+        .log-msg {
+            color: #cbd5e1;
+            flex: 1;
+        }
+
+        /* Toast */
         #toast {
             position: fixed;
             bottom: 24px;
@@ -446,19 +761,8 @@
         #toast.success { background: #064e3b; border-color: #10b981; }
         #toast.error   { background: #7f1d1d; border-color: #ef4444; }
 
-        /* Modal */
-        .modal-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.75);
-            backdrop-filter: blur(4px);
-            display: none;
-            align-items: center;
-            justify-content: center;
-            z-index: 100;
-            padding: 20px;
-        }
-        .modal {
+        /* Login Modal */
+        .login-card {
             background: var(--surface-card);
             border: 1px solid var(--border);
             border-radius: 20px;
@@ -468,7 +772,7 @@
             box-shadow: 0 20px 50px rgba(0,0,0,0.6);
         }
 
-        /* Table */
+        /* History Table */
         table {
             width: 100%;
             border-collapse: collapse;
@@ -516,7 +820,7 @@
         <div class="hero">
             <div class="hero-left">
                 <h1>⚡ Welcome, HeisDaemon Executive</h1>
-                <p>Execute financial transfers, mansion beautifications, and club sweeps seamlessly. All results automatically sync to your Telegram bot.</p>
+                <p>High-frequency transfers, celebrity mansion cloning, and nightclub cash sweeper. Live progress and alerts sync directly to your Telegram bot.</p>
             </div>
             <div class="hero-stats">
                 <div class="stat-box">
@@ -524,7 +828,7 @@
                     <div class="stat-value" id="statTotalWealth">Loading…</div>
                 </div>
                 <div class="stat-box">
-                    <div class="stat-label">Connected Accounts</div>
+                    <div class="stat-label">Active Accounts</div>
                     <div class="stat-value" id="statAccountsCount">Loading…</div>
                 </div>
             </div>
@@ -538,7 +842,7 @@
             <button class="tab-btn" onclick="switchTab('house', this)">🏰 House Beautification</button>
             <button class="tab-btn" onclick="switchTab('quilox', this)">🪩 Quilox Cash Sweeper</button>
             <button class="tab-btn" onclick="switchTab('llbm', this)">💎 Support LLBM</button>
-            <button class="tab-btn" onclick="switchTab('history', this)">📋 Activity Log</button>
+            <button class="tab-btn" onclick="switchTab('history', this)">📋 Transfers Table</button>
         </div>
 
         <!-- TAB 1: ACCOUNTS & PORTFOLIO -->
@@ -621,7 +925,7 @@
                     🚀 Execute Transfer Now
                 </button>
                 <div style="font-size: 12px; color: var(--text-muted); text-align: center; margin-top: 10px;">
-                    🔔 Real-time confirmation & receipt will instantly be dispatched to <b>@HeisdaemonBot</b>
+                    🔔 Real-time confirmation & receipt will automatically be dispatched to <b>@HeisdaemonBot</b>
                 </div>
             </div>
         </div>
@@ -749,7 +1053,7 @@
             </div>
         </div>
 
-        <!-- TAB 7: ACTIVITY HISTORY -->
+        <!-- TAB 7: TRANSFERS TABLE -->
         <div id="tab-history" class="tab-pane">
             <div class="card">
                 <div class="card-header">
@@ -774,11 +1078,82 @@
             </div>
         </div>
 
+        <!-- ────────────────────────────────────────────────────────────────────────
+             REAL-TIME TERMINAL CONSOLE LOG (Always visible at bottom)
+             ──────────────────────────────────────────────────────────────────────── -->
+        <div class="terminal-card">
+            <div class="terminal-header">
+                <div class="terminal-title">
+                    <span class="term-pulse"></span>
+                    <span>HEISDAEMON REAL-TIME CONSOLE STREAM</span>
+                </div>
+                <div class="term-controls">
+                    <span class="term-chip active" onclick="setLogFilter('all', this)">ALL</span>
+                    <span class="term-chip" onclick="setLogFilter('transfer', this)">TRANSFERS</span>
+                    <span class="term-chip" onclick="setLogFilter('batch', this)">BATCHES</span>
+                    <span class="term-chip" onclick="setLogFilter('system', this)">ENGINE</span>
+                    <span class="term-chip" onclick="toggleAutoScroll(this)" id="btnAutoScroll">SCROLL: ON</span>
+                    <span class="term-chip" onclick="clearLocalLogs()">CLEAR</span>
+                </div>
+            </div>
+            <div class="terminal-body" id="termBody">
+                <div class="log-row">
+                    <span class="log-time">[Init]</span>
+                    <span class="log-tag engine">SYSTEM</span>
+                    <span class="log-msg">Connecting to HeisDaemon live event pipeline…</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ────────────────────────────────────────────────────────────────────────
+         ROLLING BEAUTIFUL PROGRESS MODAL
+         ──────────────────────────────────────────────────────────────────────── -->
+    <div id="progressModal" class="modal-overlay">
+        <div class="progress-card">
+            
+            <!-- Rolling Orbital Glowing Spinner -->
+            <div class="orbital-wrapper">
+                <div class="orbital-ring outer"></div>
+                <div class="orbital-ring inner"></div>
+                <div class="orbital-core" id="progPercent">0%</div>
+            </div>
+
+            <div class="progress-title" id="progTitle">⚡ Operation in Progress</div>
+            <div class="progress-subtitle" id="progSubtitle">Communicating with LagosLife server…</div>
+
+            <!-- Rolling Striped Progress Bar -->
+            <div class="progress-bar-track">
+                <div class="progress-bar-fill" id="progBarFill" style="width: 0%;"></div>
+            </div>
+
+            <!-- Progress Metrics -->
+            <div class="progress-stats-grid" id="progMetrics">
+                <div class="p-stat">
+                    <div class="p-stat-label">Chunks</div>
+                    <div class="p-stat-val" id="pChunks">0 / 1</div>
+                </div>
+                <div class="p-stat">
+                    <div class="p-stat-label">Sent</div>
+                    <div class="p-stat-val" id="pSent">₦0</div>
+                </div>
+                <div class="p-stat">
+                    <div class="p-stat-label">Cooldown</div>
+                    <div class="p-stat-val" id="pCooldown">Ready</div>
+                </div>
+            </div>
+
+            <div class="prog-actions-row">
+                <button onclick="cancelActiveBatch()" id="btnProgCancel" class="btn-prog-cancel">🚫 Cancel Batch</button>
+                <button onclick="closeProgressModal()" class="btn-prog-min">Minimize Window</button>
+            </div>
+        </div>
     </div>
 
     <!-- Login Modal -->
     <div id="loginModal" class="modal-overlay">
-        <div class="modal">
+        <div class="login-card">
             <div class="card-header" style="margin-bottom: 16px;">
                 <div class="card-title">🔑 Connect LagosLife Account</div>
                 <button onclick="closeLoginModal()" style="background: none; border: none; color: #fff; font-size: 20px; cursor: pointer;">&times;</button>
@@ -801,7 +1176,15 @@
     <div id="toast"></div>
 
     <script>
-        let portalData = { accounts: [], mansion_catalog: {} };
+        let portalData = { accounts: [], mansion_catalog: [] };
+        let activeJobId = null;
+        let batchPollInterval = null;
+        let logPollInterval = null;
+        let autoScrollLogs = true;
+        let currentLogFilter = 'all';
+        let rawLogsCache = [];
+        let cooldownSeconds = 0;
+        let cooldownTimer = null;
 
         async function fetchAPI(action, data = {}) {
             try {
@@ -881,7 +1264,7 @@
                         <div class="acc-balance">${acc.balance_fmt}</div>
                         <div class="acc-footer">
                             <span>PIN: ${acc.has_pin ? 'Protected ✅' : 'Not Set'}</span>
-                            <button onclick="refreshSingleBalance('${acc.chat_id}')" class="chip">🔄 Check Balance</button>
+                            <button onclick="refreshSingleBalance('${acc.chat_id}')" class="chip">🔄 Refresh Balance</button>
                         </div>
                     </div>
                 `;
@@ -991,6 +1374,103 @@
             noteEl.style.display = 'none';
         }
 
+        /* ────────────────────────────────────────────────────────────────────────
+           PROGRESS MODAL CONTROLLERS (ROLLING BEAUTIFUL)
+           ──────────────────────────────────────────────────────────────────────── */
+        function openProgressModal(title, subtitle = 'Connecting to LagosLife nodes…') {
+            document.getElementById('progTitle').innerText = title;
+            document.getElementById('progSubtitle').innerText = subtitle;
+            document.getElementById('progPercent').innerText = '0%';
+            document.getElementById('progBarFill').style.width = '0%';
+            document.getElementById('pChunks').innerText = '0 / 1';
+            document.getElementById('pSent').innerText = '₦0';
+            document.getElementById('pCooldown').innerText = 'Ready';
+            document.getElementById('btnProgCancel').style.display = 'inline-block';
+            document.getElementById('progressModal').style.display = 'flex';
+        }
+
+        function closeProgressModal() {
+            document.getElementById('progressModal').style.display = 'none';
+        }
+
+        function setProgressState(percent, title, subtitle, chunksStr = null, sentStr = null, cooldownStr = null) {
+            document.getElementById('progPercent').innerText = percent + '%';
+            document.getElementById('progBarFill').style.width = Math.min(100, Math.max(0, percent)) + '%';
+            if (title) document.getElementById('progTitle').innerText = title;
+            if (subtitle) document.getElementById('progSubtitle').innerText = subtitle;
+            if (chunksStr) document.getElementById('pChunks').innerText = chunksStr;
+            if (sentStr) document.getElementById('pSent').innerText = sentStr;
+            if (cooldownStr) document.getElementById('pCooldown').innerText = cooldownStr;
+        }
+
+        function startCooldownTracker(seconds) {
+            if (cooldownTimer) clearInterval(cooldownTimer);
+            cooldownSeconds = seconds;
+            document.getElementById('pCooldown').innerText = cooldownSeconds + 's remaining';
+            cooldownTimer = setInterval(() => {
+                cooldownSeconds--;
+                if (cooldownSeconds <= 0) {
+                    clearInterval(cooldownTimer);
+                    document.getElementById('pCooldown').innerText = 'Dispatched 🚀';
+                } else {
+                    document.getElementById('pCooldown').innerText = cooldownSeconds + 's remaining';
+                }
+            }, 1000);
+        }
+
+        function pollActiveBatch(jobId) {
+            activeJobId = jobId;
+            if (batchPollInterval) clearInterval(batchPollInterval);
+
+            batchPollInterval = setInterval(async () => {
+                const res = await fetchAPI('get_batch_status', { job_id: jobId });
+                if (!res.ok || !res.job) {
+                    clearInterval(batchPollInterval);
+                    return;
+                }
+
+                const job = res.job;
+                const pct = job.percent || 0;
+                const chunksText = `${job.completed_chunks} / ${job.total_chunks}`;
+                const sentText = job.sent_amount_srt || '₦0';
+
+                if (job.status === 'cancelled') {
+                    clearInterval(batchPollInterval);
+                    setProgressState(pct, '🚫 Batch Cancelled', 'Batch was halted by user request.', chunksText, sentText, 'Halted');
+                    document.getElementById('btnProgCancel').style.display = 'none';
+                    refreshData();
+                    return;
+                }
+
+                if (job.is_done) {
+                    clearInterval(batchPollInterval);
+                    setProgressState(100, '🎉 Batch Completed!', `Successfully sent ${job.sent_amount_fmt} across ${job.total_chunks} chunks.`, chunksText, sentText, 'Complete');
+                    document.getElementById('btnProgCancel').style.display = 'none';
+                    showToast(`Batch completed! Total ${sentText} dispatched.`);
+                    refreshData();
+                    return;
+                }
+
+                // In Progress
+                const sub = `Dispersing chunk ${job.completed_chunks + 1} of ${job.total_chunks}…`;
+                setProgressState(pct, '⚡ Processing Chunks…', sub, chunksText, sentText, 'Active');
+            }, 2500);
+        }
+
+        async function cancelActiveBatch() {
+            if (!activeJobId) {
+                closeProgressModal();
+                return;
+            }
+            if (confirm("Are you sure you want to cancel this batch? Current chunk will finalize and remaining chunks will halt.")) {
+                const res = await fetchAPI('cancel_batch', { job_id: activeJobId });
+                showToast(res.message || 'Cancellation requested.');
+            }
+        }
+
+        /* ────────────────────────────────────────────────────────────────────────
+           OPERATIONAL ACTIONS
+           ──────────────────────────────────────────────────────────────────────── */
         async function executeTransfer() {
             const btn = document.getElementById('btnSendMoney');
             const senderChatId = document.getElementById('sendFromSelect').value;
@@ -1004,8 +1484,10 @@
                 return;
             }
 
+            openProgressModal('⚡ Executing Transfer…', `Dispatching funds to @${recipient.replace(/^@/, '')}…`);
+            setProgressState(25, 'Connecting to Game Engine…', `Resolving @${recipient.replace(/^@/, '')}…`);
+
             btn.disabled = true;
-            btn.innerText = '⏳ Executing Transfer…';
 
             const res = await fetchAPI('send_money', {
                 chat_id: senderChatId,
@@ -1016,14 +1498,24 @@
             });
 
             btn.disabled = false;
-            btn.innerText = '🚀 Execute Transfer Now';
 
             if (res.ok) {
-                showToast(res.message);
-                document.getElementById('sendRecipient').value = '';
-                document.getElementById('sendAmount').value = '';
-                refreshData();
+                if (res.batch) {
+                    // Mega multi-chunk batch
+                    openProgressModal('📦 Mega Transfer Batch Active', `Sending ${amount} in ${res.total_chunks} chunks with 32s cooldown timing…`);
+                    pollActiveBatch(res.job_id);
+                } else {
+                    // Single chunk instant success
+                    setProgressState(100, '🎉 Transfer Successful!', res.message, '1 / 1', res.amount_srt, 'Done');
+                    document.getElementById('btnProgCancel').style.display = 'none';
+                    showToast(res.message);
+                    document.getElementById('sendRecipient').value = '';
+                    document.getElementById('sendAmount').value = '';
+                    refreshData();
+                }
             } else {
+                setProgressState(0, '❌ Transfer Failed', res.error || 'Transfer declined by game server.', '0 / 1', '₦0', 'Failed');
+                document.getElementById('btnProgCancel').style.display = 'none';
                 showToast(res.error || 'Transfer failed', false);
             }
         }
@@ -1038,8 +1530,10 @@
                 return;
             }
 
+            openProgressModal('👥 Resolving Payroll List…', 'Validating recipient usernames and splitting chunks…');
+            setProgressState(15, 'Resolving Recipient IDs…', 'Connecting to LagosLife database…');
+
             btn.disabled = true;
-            btn.innerText = '⏳ Initializing Payroll Batch…';
 
             const res = await fetchAPI('batch_payroll', {
                 chat_id: senderChatId,
@@ -1047,20 +1541,22 @@
             });
 
             btn.disabled = false;
-            btn.innerText = '🚀 Launch Payroll Batch Worker';
 
             if (res.ok) {
-                showToast(res.message);
+                openProgressModal('🚀 Payroll Batch Active', `Dispersing ${res.total_amount_srt} across ${res.total_chunks} chunks with 32s cooldown timing…`);
                 document.getElementById('payrollList').value = '';
-                refreshData();
+                pollActiveBatch(res.job_id);
             } else {
+                setProgressState(0, '❌ Payroll Launch Failed', res.error || 'Could not initialize batch.', '0 / 0', '₦0', 'Failed');
+                document.getElementById('btnProgCancel').style.display = 'none';
                 showToast(res.error || 'Payroll launch failed', false);
             }
         }
 
         async function applyCatalogMansion(tplKey) {
             const chatId = document.getElementById('houseAccountSelect').value;
-            showToast('Installing luxury mansion elements…');
+            openProgressModal('🏰 Installing Mansion…', 'Removing clutter and installing luxury elements…');
+            setProgressState(50, 'Placing Furniture & Marble…', 'Clean-slate placement underway…');
 
             const res = await fetchAPI('beautify_template', {
                 chat_id: chatId,
@@ -1068,9 +1564,13 @@
             });
 
             if (res.ok) {
+                setProgressState(100, '🎉 Residence Beautified!', res.message, '1 / 1', 'Complete', 'Installed');
+                document.getElementById('btnProgCancel').style.display = 'none';
                 showToast(res.message);
                 refreshData();
             } else {
+                setProgressState(0, '❌ Beautification Failed', res.error, '0 / 1', 'Failed', 'Error');
+                document.getElementById('btnProgCancel').style.display = 'none';
                 showToast(res.error || 'Failed to install mansion', false);
             }
         }
@@ -1085,8 +1585,10 @@
                 return;
             }
 
+            openProgressModal('🔍 Inspecting Residence…', `Knocking and reading house layout of @${target}…`);
+            setProgressState(40, 'Scanning Room Coordinates…', `Capturing furniture items from @${target}…`);
+
             btn.disabled = true;
-            btn.innerText = '🔍 Inspecting Player Residence…';
 
             const res = await fetchAPI('clone_player_house', {
                 chat_id: chatId,
@@ -1094,13 +1596,16 @@
             });
 
             btn.disabled = false;
-            btn.innerText = '🔍 Inspect & Clone Player Layout';
 
             if (res.ok) {
+                setProgressState(100, '🎉 Layout Cloned!', res.message, '1 / 1', 'Done', 'Installed');
+                document.getElementById('btnProgCancel').style.display = 'none';
                 showToast(res.message);
                 document.getElementById('targetPlayerUser').value = '';
                 refreshData();
             } else {
+                setProgressState(0, '⚠️ Clone Notice', res.error, '0 / 1', 'Pending', 'Action Needed');
+                document.getElementById('btnProgCancel').style.display = 'none';
                 showToast(res.error || 'Could not clone player house', false);
             }
         }
@@ -1109,30 +1614,37 @@
             const btn = document.getElementById('btnSweepQuilox');
             const chatId = document.getElementById('quiloxAccountSelect').value;
 
+            openProgressModal('🪩 Sweeping Quilox Floor…', 'Scanning VIP dance floor for sprayed banknotes…');
+            setProgressState(50, 'Scooping Banknotes…', 'Depositing collected cash into wallet…');
+
             btn.disabled = true;
-            btn.innerText = '⚡ Sweeping Floor…';
 
             const res = await fetchAPI('quilox_sweep', { chat_id: chatId });
 
             btn.disabled = false;
-            btn.innerText = '⚡ Sweep Dance Floor Now';
 
             if (res.ok) {
+                setProgressState(100, '🍸 Dance Floor Swept!', res.message, '1 / 1', res.grabbed_srt || '₦0', 'Claimed');
+                document.getElementById('btnProgCancel').style.display = 'none';
                 showToast(res.message);
                 refreshData();
             } else {
+                setProgressState(0, '❌ Sweep Failed', res.error, '0 / 1', '₦0', 'Error');
+                document.getElementById('btnProgCancel').style.display = 'none';
                 showToast(res.error || 'Floor sweep failed', false);
             }
         }
 
         async function teleportQuilox() {
             const chatId = document.getElementById('quiloxAccountSelect').value;
+            showToast('Teleporting character to Quilox VIP entrance…');
             const res = await fetchAPI('quilox_teleport', { chat_id: chatId });
             showToast(res.message || (res.ok ? 'Teleported!' : res.error), res.ok);
         }
 
         async function claimQuilox() {
             const chatId = document.getElementById('quiloxAccountSelect').value;
+            showToast('Depositing all claimed club cash…');
             const res = await fetchAPI('quilox_claim', { chat_id: chatId });
             showToast(res.message || (res.ok ? 'Claimed!' : res.error), res.ok);
             if (res.ok) refreshData();
@@ -1148,8 +1660,10 @@
                 return;
             }
 
+            openProgressModal('💎 Processing Contribution…', 'Sending funds to LLBM Movement (@LLBmovement)…');
+            setProgressState(60, 'Transferring Contribution…', 'Notifying Telegram channel…');
+
             btn.disabled = true;
-            btn.innerText = '⏳ Sending Contribution…';
 
             const res = await fetchAPI('support_llbm', {
                 chat_id: chatId,
@@ -1157,13 +1671,16 @@
             });
 
             btn.disabled = false;
-            btn.innerText = '💎 Send Contribution Now';
 
             if (res.ok) {
+                setProgressState(100, '🎉 Contribution Sent!', res.message, '1 / 1', amount, 'Completed');
+                document.getElementById('btnProgCancel').style.display = 'none';
                 showToast(res.message);
                 document.getElementById('llbmAmount').value = '';
                 refreshData();
             } else {
+                setProgressState(0, '❌ Contribution Failed', res.error, '0 / 1', 'Failed', 'Error');
+                document.getElementById('btnProgCancel').style.display = 'none';
                 showToast(res.error || 'Contribution failed', false);
             }
         }
@@ -1223,8 +1740,79 @@
             }
         }
 
+        /* ────────────────────────────────────────────────────────────────────────
+           REAL-TIME TERMINAL LOG STREAM
+           ──────────────────────────────────────────────────────────────────────── */
+        async function fetchLogs() {
+            const res = await fetchAPI('get_logs');
+            if (res.ok && res.logs) {
+                rawLogsCache = res.logs;
+                renderTerminalLogs();
+            }
+        }
+
+        function setLogFilter(filter, el) {
+            currentLogFilter = filter;
+            document.querySelectorAll('.term-chip').forEach(c => c.classList.remove('active'));
+            if (el) el.classList.add('active');
+            renderTerminalLogs();
+        }
+
+        function toggleAutoScroll(el) {
+            autoScrollLogs = !autoScrollLogs;
+            el.innerText = autoScrollLogs ? 'SCROLL: ON' : 'SCROLL: OFF';
+            el.style.color = autoScrollLogs ? 'var(--accent)' : 'var(--danger)';
+        }
+
+        function clearLocalLogs() {
+            rawLogsCache = [];
+            document.getElementById('termBody').innerHTML = '<div class="log-row"><span class="log-time">[Clear]</span> <span class="log-tag engine">SYSTEM</span> <span class="log-msg">Logs cleared by user. Streaming fresh events…</span></div>';
+        }
+
+        function renderTerminalLogs() {
+            const tb = document.getElementById('termBody');
+            if (!rawLogsCache || rawLogsCache.length === 0) return;
+
+            let filtered = rawLogsCache;
+            if (currentLogFilter !== 'all') {
+                filtered = rawLogsCache.filter(l => l.type === currentLogFilter);
+            }
+
+            let html = '';
+            filtered.forEach(l => {
+                let tagClass = 'engine';
+                if (l.type === 'transfer') tagClass = (l.badge === 'FAILED') ? 'failed' : 'transfer';
+                else if (l.type === 'batch') tagClass = 'batch';
+                else if (l.type === 'system') tagClass = 'engine';
+
+                html += `
+                    <div class="log-row">
+                        <span class="log-time">[${l.time}]</span>
+                        <span class="log-tag ${tagClass}">${l.badge}</span>
+                        <span class="log-msg">${escapeHtml(l.text)}</span>
+                    </div>
+                `;
+            });
+
+            tb.innerHTML = html;
+
+            if (autoScrollLogs) {
+                tb.scrollTop = tb.scrollHeight;
+            }
+        }
+
+        function escapeHtml(str) {
+            return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
         // Initialize on load
-        window.addEventListener('DOMContentLoaded', refreshData);
+        window.addEventListener('DOMContentLoaded', () => {
+            refreshData();
+            fetchLogs();
+            // Real-time polling
+            setInterval(fetchLogs, 3000);
+            setInterval(refreshData, 10000);
+        });
     </script>
 </body>
 </html>
