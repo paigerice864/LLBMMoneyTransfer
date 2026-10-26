@@ -5,9 +5,13 @@
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Headers: Content-Type, X-Master-Token, X-Master-Key');
 
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+if (session_status() === PHP_SESSION_NONE) {
+    @session_start();
+}
+
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
     exit;
 }
 
@@ -46,7 +50,73 @@ function notifyBotAndChannel(string $text, ?string $targetChatId = null): void {
     }
 }
 
+function getMasterExpectedToken(): string {
+    return hash_hmac('sha256', MASTER_PASSWORD . date('Y-m-d'), DB_PASS);
+}
+
+function checkMasterAuth(): bool {
+    if (!empty($_SESSION['master_unlocked']) && $_SESSION['master_unlocked'] === true) {
+        return true;
+    }
+    global $jsonBody;
+    $clientToken = $_SERVER['HTTP_X_MASTER_TOKEN'] ?? (
+        $_SERVER['HTTP_X_MASTER_KEY'] ?? (
+            $jsonBody['master_token'] ?? (
+                $_GET['token'] ?? ($_POST['token'] ?? '')
+            )
+        )
+    );
+    $expected = getMasterExpectedToken();
+    $yesterday = hash_hmac('sha256', MASTER_PASSWORD . date('Y-m-d', strtotime('-1 day')), DB_PASS);
+    if ($clientToken && ($clientToken === $expected || $clientToken === $yesterday || $clientToken === MASTER_PASSWORD)) {
+        $_SESSION['master_unlocked'] = true;
+        return true;
+    }
+    return false;
+}
+
 try {
+    // ────────────────────────────────────────────────────────────────────────────
+    // 0. Master Security Authentication Actions (Unlock / Lock / Status)
+    // ────────────────────────────────────────────────────────────────────────────
+    if ($action === 'master_status') {
+        respond(true, [
+            'unlocked' => checkMasterAuth()
+        ]);
+    }
+
+    if ($action === 'master_unlock') {
+        $submittedPass = trim($jsonBody['password'] ?? ($_POST['password'] ?? ''));
+        if ($submittedPass === MASTER_PASSWORD) {
+            $_SESSION['master_unlocked'] = true;
+            $token = getMasterExpectedToken();
+            respond(true, [
+                'token'   => $token,
+                'message' => 'Executive master access granted! Portal unlocked.'
+            ]);
+        } else {
+            respond(false, [
+                'locked' => true
+            ], 'Invalid master password. Access denied.');
+        }
+    }
+
+    if ($action === 'master_lock') {
+        $_SESSION['master_unlocked'] = false;
+        respond(true, [
+            'locked'  => true,
+            'message' => 'Executive suite successfully locked.'
+        ]);
+    }
+
+    // Master Gate Guard (Protects all account balances, transfer endpoints, and actions)
+    if (!checkMasterAuth()) {
+        respond(false, [
+            'locked'        => true,
+            'auth_required' => true
+        ], 'Master Security Password required. Executive portal is locked.');
+    }
+
     // ────────────────────────────────────────────────────────────────────────────
     // 1. Get All Accounts & Portfolio Overview
     // ────────────────────────────────────────────────────────────────────────────

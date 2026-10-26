@@ -815,6 +815,9 @@ header("Expires: 0");
                 <button onclick="refreshData()" class="btn-pill">
                     🔄 Refresh
                 </button>
+                <button onclick="lockMasterPortal()" class="btn-pill" style="border-color: rgba(239, 68, 68, 0.6); color: #ef4444;" title="Lock Portal Immediately">
+                    🔒 Lock
+                </button>
             </div>
         </div>
     </header>
@@ -1180,6 +1183,34 @@ header("Expires: 0");
         </div>
     </div>
 
+    <!-- MASTER SECURITY LOCK SCREEN OVERLAY -->
+    <div id="masterLockOverlay" style="position: fixed; inset: 0; background: radial-gradient(circle at 50% 25%, #131d33 0%, #090d16 100%); z-index: 999999; display: flex; align-items: center; justify-content: center; padding: 20px;">
+        <div class="lock-card" style="background: rgba(15, 23, 42, 0.96); border: 1px solid rgba(16, 185, 129, 0.35); box-shadow: 0 0 60px rgba(0,0,0,0.9), 0 0 35px rgba(16, 185, 129, 0.18); border-radius: 20px; max-width: 440px; width: 100%; padding: 38px 28px; text-align: center; backdrop-filter: blur(16px);">
+            <div style="width: 76px; height: 76px; margin: 0 auto 18px; border-radius: 50%; background: rgba(16, 185, 129, 0.12); border: 2px solid #10b981; display: flex; align-items: center; justify-content: center; font-size: 34px; box-shadow: 0 0 25px rgba(16, 185, 129, 0.35);">
+                🔐
+            </div>
+            <h2 style="font-size: 21px; font-weight: 800; color: #fff; margin-bottom: 6px; letter-spacing: -0.5px;">HEISDAEMON EXECUTIVE GATE</h2>
+            <div style="font-size: 12px; color: #10b981; font-weight: 800; letter-spacing: 0.5px; margin-bottom: 14px;">MASTER SECURITY PROTOCOL ACTIVE</div>
+            <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5; margin-bottom: 22px;">
+                All connected player accounts, total wealth, and fund transfers are locked to safeguard assets. Enter Master Password to unlock.
+            </p>
+            <div class="form-group" style="text-align: left; margin-bottom: 16px;">
+                <label style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Master Password:</label>
+                <div style="position: relative;">
+                    <input type="password" id="masterGatePass" class="input-control" placeholder="••••" maxlength="16" style="padding-right: 44px; font-size: 20px; letter-spacing: 3px; text-align: center;" onkeydown="if(event.key==='Enter') submitMasterUnlock()">
+                    <span onclick="toggleMasterPassVisibility()" style="position: absolute; right: 14px; top: 50%; transform: translateY(-50%); cursor: pointer; opacity: 0.7; font-size: 16px;" id="btnTogglePass">👁️</span>
+                </div>
+                <div id="masterLockError" style="font-size: 12px; color: #ef4444; font-weight: 700; margin-top: 8px; display: none;"></div>
+            </div>
+            <button onclick="submitMasterUnlock()" id="btnMasterUnlock" class="btn-action" style="width: 100%; font-size: 15px; font-weight: 800; padding: 14px;">
+                🔓 Unlock Executive Suite
+            </button>
+            <div style="margin-top: 20px; font-size: 11px; color: var(--text-muted);">
+                256-Bit Cryptographic Master Verification • HeisDaemon
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notification -->
     <div id="toast"></div>
 
@@ -1194,14 +1225,102 @@ header("Expires: 0");
         let cooldownSeconds = 0;
         let cooldownTimer = null;
 
-        async function fetchAPI(action, data = {}) {
+        function showMasterLockScreen() {
+            document.getElementById('masterLockOverlay').style.display = 'flex';
+            document.getElementById('masterGatePass').value = '';
+            document.getElementById('masterLockError').style.display = 'none';
+            setTimeout(() => document.getElementById('masterGatePass').focus(), 100);
+        }
+
+        function hideMasterLockScreen() {
+            document.getElementById('masterLockOverlay').style.display = 'none';
+        }
+
+        async function submitMasterUnlock() {
+            const pass = document.getElementById('masterGatePass').value.trim();
+            const btn = document.getElementById('btnMasterUnlock');
+            const errEl = document.getElementById('masterLockError');
+            if (!pass) {
+                errEl.innerText = 'Please enter master password';
+                errEl.style.display = 'block';
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerText = '⏳ Verifying…';
+            errEl.style.display = 'none';
+
             try {
-                const res = await fetch('web_api.php?action=' + encodeURIComponent(action), {
+                const res = await fetch('web_api.php?action=master_unlock', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: pass })
+                });
+                const data = await res.json();
+                btn.disabled = false;
+                btn.innerText = '🔓 Unlock Executive Suite';
+
+                if (data.ok && data.token) {
+                    sessionStorage.setItem('hd_master_token', data.token);
+                    localStorage.setItem('hd_master_token', data.token);
+                    hideMasterLockScreen();
+                    showToast('🔓 Master Access Granted! Executive Suite Unlocked.');
+                    refreshData();
+                } else {
+                    errEl.innerText = data.error || 'Invalid master password. Access denied.';
+                    errEl.style.display = 'block';
+                    const inp = document.getElementById('masterGatePass');
+                    inp.style.borderColor = '#ef4444';
+                    setTimeout(() => { inp.style.borderColor = 'var(--border)'; }, 1500);
+                }
+            } catch (err) {
+                btn.disabled = false;
+                btn.innerText = '🔓 Unlock Executive Suite';
+                errEl.innerText = 'Network error. Please try again.';
+                errEl.style.display = 'block';
+            }
+        }
+
+        async function lockMasterPortal() {
+            sessionStorage.removeItem('hd_master_token');
+            localStorage.removeItem('hd_master_token');
+            try {
+                await fetch('web_api.php?action=master_lock', { method: 'POST' });
+            } catch (e) {}
+            showMasterLockScreen();
+            showToast('🔒 Portal Locked. Master authentication cleared.', false);
+        }
+
+        function toggleMasterPassVisibility() {
+            const inp = document.getElementById('masterGatePass');
+            const btn = document.getElementById('btnTogglePass');
+            if (inp.type === 'password') {
+                inp.type = 'text';
+                btn.innerText = '🔒';
+            } else {
+                inp.type = 'password';
+                btn.innerText = '👁️';
+            }
+        }
+
+        async function fetchAPI(action, data = {}) {
+            try {
+                const token = sessionStorage.getItem('hd_master_token') || localStorage.getItem('hd_master_token') || '';
+                const headers = { 'Content-Type': 'application/json' };
+                if (token) {
+                    headers['X-Master-Token'] = token;
+                    data.master_token = token;
+                }
+                const res = await fetch('web_api.php?action=' + encodeURIComponent(action), {
+                    method: 'POST',
+                    headers: headers,
                     body: JSON.stringify(data)
                 });
-                return await res.json();
+                const json = await res.json();
+                if (json && json.locked) {
+                    showMasterLockScreen();
+                }
+                return json;
             } catch (e) {
                 return { ok: false, error: e.message };
             }
@@ -1820,12 +1939,33 @@ header("Expires: 0");
         }
 
         // Initialize on load
-        window.addEventListener('DOMContentLoaded', () => {
-            refreshData();
-            fetchLogs();
-            // Real-time polling
-            setInterval(fetchLogs, 3000);
-            setInterval(refreshData, 10000);
+        window.addEventListener('DOMContentLoaded', async () => {
+            const token = sessionStorage.getItem('hd_master_token') || localStorage.getItem('hd_master_token');
+            if (!token) {
+                showMasterLockScreen();
+            } else {
+                const check = await fetchAPI('master_status');
+                if (check.ok && check.unlocked) {
+                    hideMasterLockScreen();
+                    refreshData();
+                    fetchLogs();
+                } else {
+                    showMasterLockScreen();
+                }
+            }
+            // Real-time polling (only if unlocked)
+            setInterval(() => {
+                const isOverlayVisible = document.getElementById('masterLockOverlay') && document.getElementById('masterLockOverlay').style.display !== 'none';
+                if (!isOverlayVisible) {
+                    fetchLogs();
+                }
+            }, 3000);
+            setInterval(() => {
+                const isOverlayVisible = document.getElementById('masterLockOverlay') && document.getElementById('masterLockOverlay').style.display !== 'none';
+                if (!isOverlayVisible) {
+                    refreshData();
+                }
+            }, 10000);
         });
     </script>
 </body>

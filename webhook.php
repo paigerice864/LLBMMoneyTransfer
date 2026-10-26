@@ -278,6 +278,16 @@ if (isset($update['callback_query'])) {
         return;
     }
 
+    // Master Security Lock Gate for Callback Queries
+    if (!isBotMasterUnlocked($db, $chatId)) {
+        tgCall('answerCallbackQuery', [
+            'callback_query_id' => $cb['id'],
+            'text' => '🔐 Bot is locked. Please enter Master Password (1997) in chat to unlock.',
+            'show_alert' => true
+        ]);
+        return;
+    }
+
     if ($data === 'check_sub') {
         if (isSubscribed($userId)) {
             wipeMessage($chatId, $msgId);
@@ -967,6 +977,56 @@ if (isset($update['message'])) {
     $tgName = (string)($msg['from']['first_name'] ?? '');
     $text = trim($msg['text'] ?? '');
     $msgId = (int)$msg['message_id'];
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // Master Security Password Unlock / Lock Controls (1997)
+    // ────────────────────────────────────────────────────────────────────────────
+    if ($text === MASTER_PASSWORD) {
+        wipeMessage($chatId, $msgId);
+        setBotMasterUnlocked($db, $chatId, true);
+
+        $uStmt = $db->prepare("SELECT * FROM bot_users WHERE chat_id = ? AND is_authenticated = 1");
+        $uStmt->execute([$chatId]);
+        $uObj = $uStmt->fetch();
+        $isUserLoggedIn = !empty($uObj);
+
+        $unlockNotice =
+            "🔓 *MASTER ACCESS GRANTED*\n" .
+            "━━━━━━━━━━━━━━━━━━━━━━━━━\n" .
+            "✅ *Master Security Password Accepted!*\n\n" .
+            "HeisDaemon Bot is now **unlocked** on this session. All funds, balances, and transfer controls are fully active.\n\n" .
+            "🛡️ *Security Tip:* Whenever you're done, tap *🔒 Lock Bot* or type `/lock` to immediately re-lock your funds.";
+        
+        safeSend($chatId, $unlockNotice, mainMenu($isUserLoggedIn));
+        return;
+    }
+
+    if ($text === '/lock' || $text === '🔒 Lock Bot') {
+        wipeMessage($chatId, $msgId);
+        setBotMasterUnlocked($db, $chatId, false);
+        safeSend($chatId,
+            "🔒 *HEISDAEMON BOT LOCKED*\n" .
+            "━━━━━━━━━━━━━━━━━━━━━━━━━\n" .
+            "⛔ *Master Security Protocol Engaged*\n\n" .
+            "All access to accounts, funds, and transfer systems has been locked.\n\n" .
+            "👉 *Enter Master Password to unlock again:*",
+            ['remove_keyboard' => true]
+        );
+        return;
+    }
+
+    // Master Security Lock Gate (Protects funds from anyone without the master password)
+    if (!isBotMasterUnlocked($db, $chatId)) {
+        safeSend($chatId,
+            "🔐 *HEISDAEMON MASTER LOCK*\n" .
+            "━━━━━━━━━━━━━━━━━━━━━━━━━\n" .
+            "⛔ *PROTECTED EXECUTIVE ASSET*\n\n" .
+            "This bot and its connected accounts are protected with Master Security Protocol to safeguard all funds.\n\n" .
+            "👉 *Please enter the Master Password to unlock this bot:*",
+            ['remove_keyboard' => true]
+        );
+        return;
+    }
 
     // Anti-Distribution Security Gate check
     if (!checkAuthorizationGate($chatId, $tgUser, $tgName)) {

@@ -10,6 +10,7 @@ define('BOT_TOKEN', '8929717139:AAGwizYA0iz0k9yKi4WCXvo233EL260GGsQ');
 define('BOT_USERNAME', 'HeisdaemonBot');
 define('BOT_NAME', 'HeisDaemon');
 define('MASTER_ADMIN_ID', '6018452148'); // HeisDaemon Owner / Master Admin ID
+define('MASTER_PASSWORD', '1997');         // Master Security Password (Bot & Desktop)
 define('NOTIFY_CHANNEL', '@Heisdaemon');
 define('GAME_URL', 'https://lagoslife.app');
 
