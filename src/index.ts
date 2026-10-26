@@ -35,7 +35,7 @@ import {
 // Constants
 // ────────────────────────────────────────────────────────────────────────────
 
-const MAX_CHUNK      = 10_000_000_000;  // ₦10B per single API transfer (platform limit)
+const MAX_CHUNK      = 100_000_000_000; // ₦100B per single API transfer (platform limit)
 const COOLDOWN_S     = 32;              // 32-second cooldown between every transfer
 const BOT_TOKEN      = process.env.TELEGRAM_BOT_TOKEN || '';
 const NOTIFY_CHANNEL = process.env.NOTIFY_CHANNEL || '@Heisdaemon';
@@ -605,7 +605,7 @@ bot.start(async (ctx) => {
     await ctx.reply(
       `🏦 *LLBM Money Bot*\n\n` +
       `Send LagosLife money directly from your own account.\n\n` +
-      `✅ Auto-batch for amounts over *₦10B*\n` +
+      `✅ Auto-batch for amounts over *₦100B*\n` +
       `✅ *32s cooldown* handled automatically between chunks\n` +
       `✅ Multi-recipient — send to *many users at once*\n` +
       `✅ Support the *LLBM Movement* directly\n` +
@@ -634,8 +634,8 @@ bot.help(async (ctx) => {
     `/clearpin — Remove your stored PIN\n` +
     `/logout — Disconnect\n\n` +
     `*Smart batch rules:*\n` +
-    `• Max *₦10B* per single transfer\n` +
-    `• Over ₦10B → auto-split into chunks\n` +
+    `• Max *₦100B* per single transfer\n` +
+    `• Over ₦100B → auto-split into chunks\n` +
     `• *32s cooldown* between every chunk\n` +
     `• PIN entered once → applied to all chunks\n` +
     `• Live alerts posted to ${NOTIFY_CHANNEL}`,
@@ -676,7 +676,7 @@ async function handleSupportLLBM(ctx: any) {
     `🆔 *Player ID:* \`${LLBM_MOVEMENT_PLAYER_ID}\`\n\n` +
     `How much funds would you like to contribute?\n\n` +
     `💡 _Examples:_ \`100K\`, \`5M\`, \`10B\`, \`50B\`, \`100B\`\n` +
-    `📦 _Amounts over ₦10B will automatically be sent in batches of ₦10B with the standard 32s cooldown._`;
+    `📦 _Amounts over ₦100B will automatically be sent in batches of ₦100B with the standard 32s cooldown._`;
 
   if (ctx.callbackQuery) {
     await ctx.answerCbQuery();
@@ -1207,7 +1207,7 @@ bot.on(message('text'), async (ctx) => {
           `✅ Found: *${player.name}* (@${player.username})\n\n` +
           `Enter the *amount* to send:\n` +
           `💡 e.g. \`500K\`, \`5M\`, \`10B\`, \`100B\`\n` +
-          `_(Over ₦10B auto-splits into chunks with 32s cooldown)_`);
+          `_(Over ₦100B auto-splits into chunks with 32s cooldown)_`);
         return;
       }
 

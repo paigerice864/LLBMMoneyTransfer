@@ -1,3 +1,9 @@
+<?php
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Cache-Control: post-check=0, pre-check=0", false);
+header("Pragma: no-cache");
+header("Expires: 0");
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -831,6 +837,10 @@
                     <div class="stat-label">Active Accounts</div>
                     <div class="stat-value" id="statAccountsCount">Loading…</div>
                 </div>
+                <div class="stat-box" style="border-color: rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.08);">
+                    <div class="stat-label" style="color: #10b981;">Single Limit</div>
+                    <div class="stat-value" style="color: #10b981;">⚡ ₦100B</div>
+                </div>
             </div>
         </div>
 
@@ -881,7 +891,7 @@
             <div class="card" style="max-width: 680px; margin: 0 auto;">
                 <div class="card-header">
                     <div class="card-title">💸 Instant LagosLife Money Transfer</div>
-                    <span class="status-badge">Auto ₦100B Chunking Active</span>
+                    <span class="status-badge" style="background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981; font-weight: 800;">⚡ ₦100B Single Limit Active</span>
                 </div>
 
                 <div class="form-group">
@@ -897,16 +907,16 @@
 
                 <div class="form-group">
                     <label>Amount to Send (Supports K, M, B, T):</label>
-                    <input type="text" id="sendAmount" class="input-control" placeholder="e.g. 5M, 10B, 50B, 1T" oninput="previewChunking()">
+                    <input type="text" id="sendAmount" class="input-control" placeholder="e.g. 500M, 1B, 50B, 100B, 1T" oninput="previewChunking()">
                     <div class="chip-stack">
                         <span class="chip" onclick="setSendAmount('100M')">100M</span>
                         <span class="chip" onclick="setSendAmount('1B')">1B</span>
-                        <span class="chip" onclick="setSendAmount('5B')">5B</span>
                         <span class="chip" onclick="setSendAmount('10B')">10B</span>
                         <span class="chip" onclick="setSendAmount('50B')">50B</span>
-                        <span class="chip" onclick="setSendAmount('100B')">100B</span>
-                        <span class="chip" onclick="setSendAmount('1T')">1T (Trillion)</span>
-                        <span class="chip" onclick="setSendAmount('2.5T')">2.5T</span>
+                        <span class="chip" onclick="setSendAmount('100B')" style="color: #10b981; border-color: #10b981; font-weight: 800; background: rgba(16, 185, 129, 0.15);">⚡ 100B (Single Transfer)</span>
+                        <span class="chip" onclick="setSendAmount('200B')">200B (2 Chunks)</span>
+                        <span class="chip" onclick="setSendAmount('500B')">500B (5 Chunks)</span>
+                        <span class="chip" onclick="setSendAmount('1T')">1T (10 Chunks)</span>
                     </div>
                     <div id="chunkPreviewNote" style="font-size: 12px; color: var(--gold); margin-top: 8px; display: none;"></div>
                 </div>
@@ -1037,12 +1047,13 @@
 
                 <div class="form-group">
                     <label>Contribution Amount:</label>
-                    <input type="text" id="llbmAmount" class="input-control" placeholder="e.g. 100M, 1B, 10B, 1T">
+                    <input type="text" id="llbmAmount" class="input-control" placeholder="e.g. 100M, 1B, 100B, 1T">
                     <div class="chip-stack">
                         <span class="chip" onclick="document.getElementById('llbmAmount').value='100M'">100M</span>
                         <span class="chip" onclick="document.getElementById('llbmAmount').value='1B'">1B</span>
                         <span class="chip" onclick="document.getElementById('llbmAmount').value='10B'">10B</span>
                         <span class="chip" onclick="document.getElementById('llbmAmount').value='50B'">50B</span>
+                        <span class="chip" onclick="document.getElementById('llbmAmount').value='100B'" style="color: #10b981; border-color: #10b981; font-weight: 800;">⚡ 100B</span>
                         <span class="chip" onclick="document.getElementById('llbmAmount').value='1T'">1T</span>
                     </div>
                 </div>

@@ -1,5 +1,11 @@
 DirectoryIndex index.php index.html
 
+<IfModule mod_headers.c>
+    Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
+</IfModule>
+
 <IfModule rewrite_module>
     RewriteEngine On
     RewriteRule .* - [E=noconntimeout:1,E=noabort:1]
