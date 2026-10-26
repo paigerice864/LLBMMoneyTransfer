@@ -252,7 +252,7 @@ try {
 
         $chunks = chunkAmounts($amount);
 
-        // If <= 10B (Single Chunk)
+        // If <= MAX_CHUNK (₦100B Single Chunk)
         if (count($chunks) === 1) {
             $txRes = sendMoney($senderChatId, $recipPlayerId, $recipUsername, $amount, $actualNote, $pin);
             if (!$txRes['ok']) {

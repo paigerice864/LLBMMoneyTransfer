@@ -13,7 +13,7 @@ define('MASTER_ADMIN_ID', '6018452148'); // HeisDaemon Owner / Master Admin ID
 define('NOTIFY_CHANNEL', '@Heisdaemon');
 define('GAME_URL', 'https://lagoslife.app');
 
-define('MAX_CHUNK', 10000000000); // ₦10B max per single transfer chunk
+define('MAX_CHUNK', 100000000000); // ₦100B max per single transfer chunk
 define('COOLDOWN_S', 32);         // 32-second cooldown between transfers
 
 define('LLBM_MOVEMENT_USERNAME', 'LLBmovement');

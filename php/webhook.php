@@ -469,7 +469,7 @@ if (isset($update['callback_query'])) {
             "*Examples:*\n" .
             "`@alice 5M\n@bob 10B\n@charlie 1T`\n\n" .
             "Supports `K`, `M`, `B`, `T` or plain numbers.\n" .
-            "Amounts over ₦10B will automatically auto-chunk with 32s cooldown.",
+            "Amounts over ₦100B will automatically auto-chunk with 32s cooldown.",
             [
                 'inline_keyboard' => [
                     [['text' => '🔙 Back / 🏠 Home', 'callback_data' => 'multi_cancel']],
@@ -489,7 +489,7 @@ if (isset($update['callback_query'])) {
             "🆔 *Player ID:* `" . LLBM_MOVEMENT_PLAYER_ID . "`\n\n" .
             "How much funds would you like to contribute?\n\n" .
             "💡 _Examples:_ `100K`, `5M`, `10B`, `50B`, `1T`\n" .
-            "📦 _Amounts over ₦10B will automatically be sent in batches of ₦10B with the standard 32s cooldown._",
+            "📦 _Amounts over ₦100B will automatically be sent in batches of ₦100B with the standard 32s cooldown._",
             [
                 'inline_keyboard' => [
                     [['text' => '🔙 Back / 🏠 Home', 'callback_data' => 'send_cancel']],
@@ -1000,7 +1000,7 @@ if (isset($update['message'])) {
                 "🆔 *Player ID:* `{$user['ll_user_id']}`" .
                 $balLine . $pinLine . "\n\n" .
                 "🌟 *ACTIVE CAPABILITIES:*\n" .
-                "• 💸 *Mega & Trillion Transfers:* Send up to *Trillions (₦T)* with auto ₦10B chunking & 32s cooldown timing\n" .
+                "• 💸 *Mega & Trillion Transfers:* Send up to *Trillions (₦T)* with auto ₦100B chunking & 32s cooldown timing\n" .
                 "• 👥 *Multi-Recipient Payroll:* Disperse funds to dozens of players simultaneously\n" .
                 "• 🏰 *Luxury House Beautification:* Clone celebrity mansions & custom residences with clean-slate placement\n" .
                 "• 📸 *1-Click Browser Scanner:* Instant layout copy bookmarklet for in-game visits\n" .
@@ -1017,7 +1017,7 @@ if (isset($update['message'])) {
                 "Welcome to the ultimate high-frequency financial & lifestyle automation system for *LagosLife*.\n\n" .
                 "🌟 *ELITE FEATURES:*\n" .
                 "• 💸 *Mega & Trillion Transfers:* Send Millions, Billions, or *Trillions (₦T)* seamlessly\n" .
-                "• 📦 *Smart ₦10B Auto-Chunking:* Bypasses transfer limits with automatic 32s cooldown timing\n" .
+                "• 📦 *Smart ₦100B Auto-Chunking:* Bypasses transfer limits with automatic 32s cooldown timing\n" .
                 "• 👥 *Multi-Recipient Blitz:* Disperse payroll to unlimited users in one message\n" .
                 "• 🏰 *Celebrity House Cloning:* Instantly apply luxury mansions (Banana Island, Lekki Palaces)\n" .
                 "• 📸 *1-Click Browser Scanner:* Copy any player's house layout in real-time\n" .
@@ -1052,7 +1052,7 @@ if (isset($update['message'])) {
             "/quilox — Quilox nightclub floor cash sweeper & teleporter\n" .
             "/home — Return to executive dashboard\n\n" .
             "⚡ *Transfer Engine Rules:*\n" .
-            "• Transfers split into *₦10B* max chunks\n" .
+            "• Transfers split into *₦100B* max chunks\n" .
             "• Precise *32s cooldown* handled automatically between chunks\n" .
             "• Supports `K`, `M`, `B`, and `T` (Trillions)\n" .
             "• Live receipts broadcast to " . NOTIFY_CHANNEL,
@@ -1176,7 +1176,7 @@ if (isset($update['message'])) {
             "🆔 *Player ID:* `" . LLBM_MOVEMENT_PLAYER_ID . "`\n\n" .
             "How much funds would you like to contribute?\n\n" .
             "💡 _Examples:_ `100K`, `5M`, `10B`, `50B`, `1T`\n" .
-            "📦 _Amounts over ₦10B will automatically be sent in batches of ₦10B with the standard 32s cooldown._",
+            "📦 _Amounts over ₦100B will automatically be sent in batches of ₦100B with the standard 32s cooldown._",
             ['remove_keyboard' => true]
         );
         return;
@@ -1399,7 +1399,7 @@ if (isset($update['message'])) {
             $db->prepare("UPDATE pending_transfers SET step = 'amount', recipient_username = ?, recipient_player_id = ? WHERE chat_id = ?")
                ->execute([$player['username'], $player['id'], $chatId]);
 
-            $foundText = "✅ Found: *{$player['name']}* (@{$player['username']})\n\nEnter the *amount* to send:\n💡 e.g. `500K`, `5M`, `10B`, `100B`, `1T`\n_(Over ₦10B auto-splits into chunks with 32s cooldown)_";
+            $foundText = "✅ Found: *{$player['name']}* (@{$player['username']})\n\nEnter the *amount* to send:\n💡 e.g. `500K`, `5M`, `10B`, `100B`, `1T`\n_(Over ₦100B auto-splits into chunks with 32s cooldown)_";
             if ($waitId) safeEdit($chatId, $waitId, $foundText);
             else safeSend($chatId, $foundText);
             return;

@@ -881,7 +881,7 @@
             <div class="card" style="max-width: 680px; margin: 0 auto;">
                 <div class="card-header">
                     <div class="card-title">💸 Instant LagosLife Money Transfer</div>
-                    <span class="status-badge">Auto ₦10B Chunking Active</span>
+                    <span class="status-badge">Auto ₦100B Chunking Active</span>
                 </div>
 
                 <div class="form-group">
@@ -947,7 +947,7 @@
                     <label>Paste Recipient List (One per line: <code>@username amount</code>):</label>
                     <textarea id="payrollList" class="input-control" rows="8" placeholder="@alice 5M&#10;@bob 10B&#10;@charlie 1T&#10;@david 500M"></textarea>
                     <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
-                        Supports amounts in <code>K</code>, <code>M</code>, <code>B</code>, <code>T</code> or raw numbers. Amounts > ₦10B automatically auto-chunk with 32s cooldown timing.
+                        Supports amounts in <code>K</code>, <code>M</code>, <code>B</code>, <code>T</code> or raw numbers. Amounts > ₦100B automatically auto-chunk with 32s cooldown timing.
                     </div>
                 </div>
 
@@ -1364,10 +1364,10 @@
             const num = parseFloat(raw);
             if (!isNaN(num) && num > 0) {
                 const total = num * mult;
-                if (total > 10000000000) {
-                    const chunks = Math.ceil(total / 10000000000);
+                if (total > 100000000000) {
+                    const chunks = Math.ceil(total / 100000000000);
                     noteEl.style.display = 'block';
-                    noteEl.innerHTML = `📦 <b>Auto-Chunking Active:</b> Transfers <b>₦${total.toLocaleString()}</b> across <b>${chunks} chunks</b> of ₦10B with 32s cooldown timing.`;
+                    noteEl.innerHTML = `📦 <b>Auto-Chunking Active:</b> Transfers <b>₦${total.toLocaleString()}</b> across <b>${chunks} chunks</b> of ₦100B with 32s cooldown timing.`;
                     return;
                 }
             }
