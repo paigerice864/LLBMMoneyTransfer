@@ -144,9 +144,10 @@ function mainMenu(bool $loggedIn): array {
         return [
             'keyboard' => [
                 [['text' => '💸 Send Money'],       ['text' => '💰 My Balance']],
+                [['text' => '💼 My Accounts'],     ['text' => '🔐 Set/Update PIN']],
                 [['text' => '🏠 Beautify House'],   ['text' => '🪩 Quilox Money Picker']],
                 [['text' => '💎 Support LLBM'],     ['text' => '📋 Transfer History']],
-                [['text' => '👤 My Account'],       ['text' => '🔐 Set/Update PIN']],
+                [['text' => '👤 My Account'],       ['text' => '🔑 Add Account']],
                 [['text' => '🔒 Lock Bot'],         ['text' => '🔓 Logout']],
                 [['text' => '🏠 Home']],
             ],
@@ -155,8 +156,8 @@ function mainMenu(bool $loggedIn): array {
     }
     return [
         'keyboard' => [
-            [['text' => '🔑 Login'],            ['text' => '🔒 Lock Bot']],
-            [['text' => '🏠 Home']],
+            [['text' => '🔑 Login'],            ['text' => '💼 My Accounts']],
+            [['text' => '🔒 Lock Bot'],         ['text' => '🏠 Home']],
         ],
         'resize_keyboard' => true,
     ];

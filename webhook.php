@@ -149,7 +149,7 @@ function renderQuiloxMenu(string $chatId, ?int $msgId = null): void {
     if (!$db) {
         $db = getDb();
     }
-    $user = $db->query("SELECT * FROM bot_users WHERE chat_id = '$chatId'")->fetch();
+    $user = getActiveBotUser($db, $chatId);
     $totalPicked = (int)($user['quilox_total_picked'] ?? 0);
     $lastPicked = !empty($user['quilox_last_picked']) ? date('H:i d M', strtotime($user['quilox_last_picked'])) : 'None yet';
 
@@ -288,12 +288,81 @@ if (isset($update['callback_query'])) {
         return;
     }
 
+    if (strpos($data, 'switch_acc_') === 0) {
+        $targetAccId = substr($data, strlen('switch_acc_'));
+        $targetUser = $db->query("SELECT * FROM bot_users WHERE (account_id = '$targetAccId' OR ll_username = '$targetAccId') AND is_authenticated = 1")->fetch();
+        if ($targetUser) {
+            setActiveBotUser($db, $chatId, $targetUser['account_id']);
+            $bal = getBalance($targetUser['account_id']);
+            $balStr = $bal !== null ? fmtFull($bal) : 'Active';
+            safeEdit($chatId, $msgId,
+                "✅ *Switched Active Account!*\n━━━━━━━━━━━━━━━━━━━━━━━━━\n" .
+                "👤 *Active Player:* *@{$targetUser['ll_username']}*\n" .
+                "💰 *Balance:* $balStr\n\n" .
+                "All commands (`/send`, `/balance`, `/payroll`) will now run from this account.",
+                [
+                    'inline_keyboard' => [
+                        [['text' => '💸 Send Money', 'callback_data' => 'mode_send_single']],
+                        [['text' => '💼 View All Accounts', 'callback_data' => 'mode_accounts_list']],
+                        [['text' => '🏠 Home Menu', 'callback_data' => 'nav_home']],
+                    ]
+                ]
+            );
+        } else {
+            safeEdit($chatId, $msgId, "❌ Account not found.");
+        }
+        return;
+    }
+
+    if ($data === 'mode_accounts_list') {
+        wipeMessage($chatId, $msgId);
+        $allAccounts = $db->query("SELECT * FROM bot_users WHERE is_authenticated = 1 ORDER BY updated_at DESC")->fetchAll();
+        $activeUser = getActiveBotUser($db, $chatId);
+        $activeAccId = $activeUser['account_id'] ?? ($activeUser['ll_username'] ?? '');
+
+        $msg = "💼 *CONNECTED FLEET ACCOUNTS*\n━━━━━━━━━━━━━━━━━━━━━━━━━\n";
+        $kb = [];
+
+        foreach ($allAccounts as $idx => $acc) {
+            $accIdentifier = !empty($acc['account_id']) ? $acc['account_id'] : $acc['ll_username'];
+            $bal = getBalance($accIdentifier);
+            $balStr = $bal !== null ? fmtShort($bal) : 'N/A';
+            $isActive = ($acc['account_id'] === $activeAccId || $acc['ll_username'] === $activeAccId);
+            $statusIcon = $isActive ? "⚡ [ACTIVE]" : "🟢";
+            $pinIcon = !empty($acc['pin']) ? "🔐 PIN" : "⚠️ No PIN";
+
+            $msg .= ($idx + 1) . ". $statusIcon *@{$acc['ll_username']}* — ₦$balStr ($pinIcon)\n";
+
+            $btnText = ($isActive ? "✅ Active: @" : "👉 Switch to @") . $acc['ll_username'];
+            $kb[] = [
+                ['text' => $btnText, 'callback_data' => 'switch_acc_' . $accIdentifier]
+            ];
+        }
+
+        $kb[] = [['text' => '➕ Connect Another Account', 'callback_data' => 'nav_login']];
+        $kb[] = [['text' => '🏠 Home Menu', 'callback_data' => 'nav_home']];
+
+        $msg .= "\n_Tap an account below to set as your active Telegram controller:_";
+        safeSend($chatId, $msg, ['inline_keyboard' => $kb]);
+        return;
+    }
+
+    if ($data === 'nav_login') {
+        wipeMessage($chatId, $msgId);
+        $db->prepare("REPLACE INTO pending_transfers (chat_id, mode, step, updated_at) VALUES (?, 'login', 'username', NOW())")
+           ->execute([$chatId]);
+        safeSend($chatId, "🔑 *Connect LagosLife Account*\n\nPlease enter your LagosLife *username*:", [
+            'inline_keyboard' => [[['text' => '❌ Cancel', 'callback_data' => 'login_cancel']]]
+        ]);
+        return;
+    }
+
     if ($data === 'check_sub') {
         if (isSubscribed($userId)) {
             wipeMessage($chatId, $msgId);
             safeSend($chatId, "🎉 *Channel Verified!*\n\nThank you for joining " . NOTIFY_CHANNEL . ". The bot is unlocked for your account.");
 
-            $user = $db->query("SELECT * FROM bot_users WHERE chat_id = '$chatId' AND is_authenticated = 1")->fetch();
+            $user = getActiveBotUser($db, $chatId);
             if ($user) {
                 $bal = getBalance($chatId);
                 $balLine = $bal !== null ? "\n💰 Balance: *" . fmtFull($bal) . "* _(" . fmtShort($bal) . ")_" : "";
@@ -317,7 +386,7 @@ if (isset($update['callback_query'])) {
 
     // Navigation & Home Callbacks
     if ($data === 'nav_home') {
-        $user = $db->query("SELECT * FROM bot_users WHERE chat_id = '$chatId' AND is_authenticated = 1")->fetch();
+        $user = getActiveBotUser($db, $chatId);
         if ($user) {
             $bal = getBalance($chatId);
             $balLine = $bal !== null ? "\n💰 Balance: *" . fmtFull($bal) . "* _(" . fmtShort($bal) . ")_" : "";
@@ -364,7 +433,7 @@ if (isset($update['callback_query'])) {
     }
 
     if ($data === 'nav_send_menu') {
-        $user = $db->query("SELECT * FROM bot_users WHERE chat_id = '$chatId' AND is_authenticated = 1")->fetch();
+        $user = getActiveBotUser($db, $chatId);
         if (!$user) {
             safeEdit($chatId, $msgId, "🔒 Please login first.");
             return;
@@ -383,7 +452,7 @@ if (isset($update['callback_query'])) {
     }
 
     if ($data === 'nav_balance') {
-        $user = $db->query("SELECT * FROM bot_users WHERE chat_id = '$chatId' AND is_authenticated = 1")->fetch();
+        $user = getActiveBotUser($db, $chatId);
         if (!$user) { safeEdit($chatId, $msgId, "🔒 Please login first."); return; }
         $bal = getBalance($chatId);
         $balText = "💰 *Wallet Balance*\n\n👤 Account: *@{$user['ll_username']}*\n━━━━━━━━━━━━━━━━━━━━━━━━━\n💵 *" . fmtFull($bal ?? 0) . "*\n    _(" . fmtShort($bal ?? 0) . ")_";
@@ -398,7 +467,7 @@ if (isset($update['callback_query'])) {
     }
 
     if ($data === 'nav_history') {
-        $user = $db->query("SELECT * FROM bot_users WHERE chat_id = '$chatId' AND is_authenticated = 1")->fetch();
+        $user = getActiveBotUser($db, $chatId);
         if (!$user) { safeEdit($chatId, $msgId, "🔒 Please login first."); return; }
         $histStmt = $db->prepare("SELECT * FROM transfers WHERE chat_id = ? ORDER BY id DESC LIMIT 10");
         $histStmt->execute([$chatId]);
@@ -526,7 +595,7 @@ if (isset($update['callback_query'])) {
             return;
         }
 
-        $user = $db->query("SELECT * FROM bot_users WHERE chat_id = '$chatId' AND is_authenticated = 1")->fetch();
+        $user = getActiveBotUser($db, $chatId);
         $isLLBM = strtolower($pending['recipient_username']) === strtolower(LLBM_MOVEMENT_USERNAME);
         $note = $pending['note'] ?: ($isLLBM ? 'Support LLBM Movement 💎' : ('Sent via ' . BOT_NAME));
         $amount = (int)$pending['amount'];
@@ -620,7 +689,7 @@ if (isset($update['callback_query'])) {
             return;
         }
 
-        $user = $db->query("SELECT * FROM bot_users WHERE chat_id = '$chatId' AND is_authenticated = 1")->fetch();
+        $user = getActiveBotUser($db, $chatId);
         $recipients = json_decode($pending['data'], true);
         wipeMessage($chatId, $msgId);
 
@@ -710,7 +779,7 @@ if (isset($update['callback_query'])) {
         $res = applyHouseDesign($chatId, $design, $cost);
 
         if ($res['ok']) {
-            $user = $db->query("SELECT * FROM bot_users WHERE chat_id = '$chatId'")->fetch();
+            $user = getActiveBotUser($db, $chatId);
             $successMsg =
                 "🎉 *HOUSE BEAUTIFIED SUCCESSFULLY!*\n" .
                 "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" .
@@ -783,7 +852,7 @@ if (isset($update['callback_query'])) {
         $res = applyHouseDesign($chatId, $insp, 0);
 
         if ($res['ok']) {
-            $user = $db->query("SELECT * FROM bot_users WHERE chat_id = '$chatId'")->fetch();
+            $user = getActiveBotUser($db, $chatId);
             safeEdit($chatId, $msgId,
                 "🎉 *HOUSE CLONED SUCCESSFULLY!*\n" .
                 "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n" .
@@ -1040,9 +1109,7 @@ if (isset($update['message'])) {
         return;
     }
 
-    $userStmt = $db->prepare("SELECT * FROM bot_users WHERE chat_id = ? AND is_authenticated = 1");
-    $userStmt->execute([$chatId]);
-    $user = $userStmt->fetch();
+    $user = getActiveBotUser($db, $chatId);
     $loggedIn = !empty($user);
 
     // /start
@@ -1129,21 +1196,63 @@ if (isset($update['message'])) {
     }
 
     // /login or 🔑 Login
-    if ($text === '/login' || $text === '🔑 Login') {
-        if ($loggedIn) {
-            safeSend($chatId, "✅ Already logged in as *@{$user['ll_username']}*.\nUse /logout to switch accounts.", mainMenu(true));
-            return;
-        }
-        $db->prepare("REPLACE INTO pending_transfers (chat_id, step, updated_at) VALUES (?, 'login_username', NOW())")->execute([$chatId]);
-        safeSend($chatId, "🔑 *Login to LagosLife*\n\nEnter your *LagosLife username*:\n_(Or send /home to return)_", ['remove_keyboard' => true]);
+    if ($text === '/login' || $text === '🔑 Login' || $text === '🔑 Add Account') {
+        $db->prepare("REPLACE INTO pending_transfers (chat_id, mode, step, updated_at) VALUES (?, 'login', 'username', NOW())")->execute([$chatId]);
+        safeSend($chatId, "🔑 *Connect LagosLife Account*\n\nPlease enter your LagosLife *username*:\n_(Your previous accounts remain safely connected on desktop)_", ['remove_keyboard' => true]);
         return;
     }
 
-    // /logout or 🔓 Logout
+    // /logout or 🔓 Logout (Preserves account on Desktop Fleet!)
     if ($text === '/logout' || $text === '🔓 Logout') {
-        $db->prepare("UPDATE bot_users SET is_authenticated = 0, ll_session_cookie = NULL, pin = NULL, updated_at = NOW() WHERE chat_id = ?")->execute([$chatId]);
+        setActiveBotUser($db, $chatId, '');
         $db->prepare("DELETE FROM pending_transfers WHERE chat_id = ?")->execute([$chatId]);
-        safeSend($chatId, "👋 Logged out. Your session and PIN have been cleared.", mainMenu(false));
+        safeSend($chatId,
+            "🔓 *Telegram Session Unlinked*\n" .
+            "━━━━━━━━━━━━━━━━━━━━━━━━━\n" .
+            "💼 *Desktop Fleet Preserved:*\n" .
+            "All connected accounts and funds remain **100% active and logged in on the Desktop Portal** with transfer PINs intact!\n\n" .
+            "• Tap *🔑 Login* to connect another account\n" .
+            "• Or send */accounts* to switch back anytime.",
+            mainMenu(false)
+        );
+        return;
+    }
+
+    // /accounts or 💼 My Accounts or /switch (Multi-Fleet Switcher)
+    if ($text === '/accounts' || $text === '💼 My Accounts' || $text === '/switch') {
+        $allAccounts = $db->query("SELECT * FROM bot_users WHERE is_authenticated = 1 ORDER BY updated_at DESC")->fetchAll();
+        if (empty($allAccounts)) {
+            safeSend($chatId, "⚠️ No accounts connected yet. Use /login to connect your first account.", mainMenu(false));
+            return;
+        }
+
+        $activeUser = getActiveBotUser($db, $chatId);
+        $activeAccId = $activeUser['account_id'] ?? ($activeUser['ll_username'] ?? '');
+
+        $msg = "💼 *CONNECTED FLEET ACCOUNTS*\n━━━━━━━━━━━━━━━━━━━━━━━━━\n";
+        $kb = [];
+
+        foreach ($allAccounts as $idx => $acc) {
+            $accIdentifier = !empty($acc['account_id']) ? $acc['account_id'] : $acc['ll_username'];
+            $bal = getBalance($accIdentifier);
+            $balStr = $bal !== null ? fmtShort($bal) : 'N/A';
+            $isActive = ($acc['account_id'] === $activeAccId || $acc['ll_username'] === $activeAccId);
+            $statusIcon = $isActive ? "⚡ [ACTIVE]" : "🟢";
+            $pinIcon = !empty($acc['pin']) ? "🔐 PIN" : "⚠️ No PIN";
+
+            $msg .= ($idx + 1) . ". $statusIcon *@{$acc['ll_username']}* — ₦$balStr ($pinIcon)\n";
+
+            $btnText = ($isActive ? "✅ Active: @" : "👉 Switch to @") . $acc['ll_username'];
+            $kb[] = [
+                ['text' => $btnText, 'callback_data' => 'switch_acc_' . $accIdentifier]
+            ];
+        }
+
+        $kb[] = [['text' => '➕ Connect Another Account', 'callback_data' => 'nav_login']];
+        $kb[] = [['text' => '🏠 Home Menu', 'callback_data' => 'nav_home']];
+
+        $msg .= "\n_Tap an account below to set as your active Telegram controller:_";
+        safeSend($chatId, $msg, ['inline_keyboard' => $kb]);
         return;
     }
 
@@ -1287,7 +1396,9 @@ if (isset($update['message'])) {
         if ($step === 'enter_pin') {
             wipeMessage($chatId, $msgId);
             $cleanPin = preg_replace('/\s+/', '', $text);
-            $db->prepare("UPDATE bot_users SET pin = ? WHERE chat_id = ?")->execute([$cleanPin, $chatId]);
+            $activeUser = getActiveBotUser($db, $chatId);
+            $targetAcc = $activeUser['account_id'] ?? ($activeUser['ll_username'] ?? $chatId);
+            $db->prepare("UPDATE bot_users SET pin = ?, updated_at = NOW() WHERE (account_id = ? OR ll_username = ? OR chat_id = ?)")->execute([$cleanPin, $targetAcc, $targetAcc, $chatId]);
             $db->prepare("DELETE FROM pending_transfers WHERE chat_id = ?")->execute([$chatId]);
             safeSend($chatId, "🔐 *Transfer PIN saved!*\n\n✅ Your PIN will automatically be included in all future transfers.", mainMenu(true));
             return;
@@ -1409,8 +1520,24 @@ if (isset($update['message'])) {
             $tgUser = $msg['from']['username'] ?? '';
             $tgName = $msg['from']['first_name'] ?? '';
 
-            $db->prepare("REPLACE INTO bot_users (chat_id, tg_username, tg_first_name, ll_username, ll_session_cookie, ll_user_id, ll_name, is_authenticated, authenticated_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())")
-               ->execute([$chatId, $tgUser, $tgName, $username, $loginRes['cookie'], $loginRes['userId'], $loginRes['name']]);
+            $accId = 'acc_' . strtolower(preg_replace('/[^a-zA-Z0-9_]/', '', $username));
+
+            $db->prepare("
+                INSERT INTO bot_users (account_id, chat_id, tg_username, tg_first_name, ll_username, ll_session_cookie, ll_user_id, ll_name, is_authenticated, authenticated_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())
+                ON DUPLICATE KEY UPDATE
+                    chat_id = VALUES(chat_id),
+                    tg_username = VALUES(tg_username),
+                    tg_first_name = VALUES(tg_first_name),
+                    ll_session_cookie = VALUES(ll_session_cookie),
+                    ll_user_id = VALUES(ll_user_id),
+                    ll_name = VALUES(ll_name),
+                    is_authenticated = 1,
+                    authenticated_at = NOW(),
+                    updated_at = NOW()
+            ")->execute([$accId, $chatId, $tgUser, $tgName, $username, $loginRes['cookie'], $loginRes['userId'], $loginRes['name']]);
+
+            setActiveBotUser($db, $chatId, $accId);
 
             $bal = getBalance($chatId);
             $balLine = $bal !== null ? "\n💰 Balance: *" . fmtFull($bal) . "* _(" . fmtShort($bal) . ")_" : "";

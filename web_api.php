@@ -121,24 +121,26 @@ try {
     // 1. Get All Accounts & Portfolio Overview
     // ────────────────────────────────────────────────────────────────────────────
     if ($action === 'get_data') {
-        $usersStmt = $db->query("SELECT chat_id, tg_username, tg_first_name, ll_username, ll_user_id, ll_name, pin, is_authenticated, quilox_total_picked, quilox_last_picked, authenticated_at, updated_at FROM bot_users ORDER BY is_authenticated DESC, authenticated_at DESC");
+        $usersStmt = $db->query("SELECT account_id, chat_id, tg_username, tg_first_name, ll_username, ll_user_id, ll_name, pin, is_authenticated, quilox_total_picked, quilox_last_picked, authenticated_at, updated_at FROM bot_users ORDER BY is_authenticated DESC, authenticated_at DESC");
         $rawUsers = $usersStmt->fetchAll(PDO::FETCH_ASSOC);
 
         $accounts = [];
         $totalWealth = 0;
 
         foreach ($rawUsers as $u) {
-            $chatId = $u['chat_id'];
+            $accId = !empty($u['account_id']) ? $u['account_id'] : ('acc_' . strtolower(preg_replace('/[^a-zA-Z0-9_]/', '', $u['ll_username'])));
             $bal = null;
             if (!empty($u['is_authenticated'])) {
-                $bal = getBalance($chatId);
+                $bal = getBalance($accId);
             }
             if ($bal !== null) {
                 $totalWealth += $bal;
             }
 
             $accounts[] = [
-                'chat_id'          => $chatId,
+                'account_id'       => $accId,
+                'chat_id'          => $accId, // Set chat_id to account_id so all frontend dropdowns remain 100% stable
+                'orig_chat_id'     => $u['chat_id'],
                 'tg_username'      => $u['tg_username'] ?: 'N/A',
                 'tg_first_name'    => $u['tg_first_name'] ?: 'User',
                 'll_username'      => $u['ll_username'],
@@ -200,6 +202,7 @@ try {
     if ($action === 'login') {
         $username = trim($jsonBody['username'] ?? ($_POST['username'] ?? ''));
         $password = trim($jsonBody['password'] ?? ($_POST['password'] ?? ''));
+        $pin      = trim($jsonBody['pin'] ?? ($_POST['pin'] ?? ''));
         $chatId   = trim($jsonBody['chat_id'] ?? ($_POST['chat_id'] ?? MASTER_ADMIN_ID));
 
         if (!$username || !$password) {
@@ -211,27 +214,33 @@ try {
             respond(false, [], $loginRes['error'] ?? 'Login failed. Verify credentials.');
         }
 
+        $accId = 'acc_' . strtolower(preg_replace('/[^a-zA-Z0-9_]/', '', $username));
+
         $stmt = $db->prepare("
-            INSERT INTO bot_users (chat_id, ll_username, ll_session_cookie, ll_user_id, ll_name, is_authenticated, authenticated_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, 1, NOW(), NOW())
+            INSERT INTO bot_users (account_id, chat_id, tg_username, tg_first_name, ll_username, ll_session_cookie, ll_user_id, ll_name, pin, is_authenticated, authenticated_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())
             ON DUPLICATE KEY UPDATE
-                ll_username = VALUES(ll_username),
                 ll_session_cookie = VALUES(ll_session_cookie),
                 ll_user_id = VALUES(ll_user_id),
                 ll_name = VALUES(ll_name),
+                pin = COALESCE(VALUES(pin), pin),
                 is_authenticated = 1,
                 authenticated_at = NOW(),
                 updated_at = NOW()
         ");
         $stmt->execute([
+            $accId,
             $chatId,
+            'WebAdmin',
+            'Web Portal',
             $username,
             $loginRes['cookie'],
             $loginRes['userId'],
             $loginRes['name'],
+            $pin ?: null
         ]);
 
-        $bal = getBalance($chatId);
+        $bal = getBalance($accId);
 
         // Notify Telegram Bot
         $alertText =
@@ -267,9 +276,9 @@ try {
             respond(false, [], 'PIN must be between 4 and 8 digits.');
         }
 
-        $db->prepare("UPDATE bot_users SET pin = ?, updated_at = NOW() WHERE chat_id = ?")->execute([$pin, $chatId]);
+        $db->prepare("UPDATE bot_users SET pin = ?, updated_at = NOW() WHERE (account_id = ? OR ll_username = ? OR chat_id = ?)")->execute([$pin, $chatId, $chatId, $chatId]);
 
-        $user = $db->query("SELECT ll_username FROM bot_users WHERE chat_id = '$chatId'")->fetch();
+        $user = $db->query("SELECT ll_username FROM bot_users WHERE (account_id = '$chatId' OR ll_username = '$chatId' OR chat_id = '$chatId')")->fetch();
         $uName = $user['ll_username'] ?? 'Account';
 
         notifyBotAndChannel(
@@ -302,7 +311,7 @@ try {
             respond(false, [], 'Invalid transfer amount. Supports numbers, K, M, B, T (e.g., 500M, 50B, 100B, 1T).');
         }
 
-        $senderUser = $db->query("SELECT * FROM bot_users WHERE chat_id = '$senderChatId' AND is_authenticated = 1")->fetch();
+        $senderUser = $db->query("SELECT * FROM bot_users WHERE (account_id = '$senderChatId' OR ll_username = '$senderChatId' OR chat_id = '$senderChatId') AND is_authenticated = 1")->fetch();
         if (!$senderUser) {
             respond(false, [], 'Sender account is not authenticated. Please log in.');
         }
@@ -409,7 +418,7 @@ try {
         if (!$senderChatId) respond(false, [], 'Sender account not selected.');
         if (!$rawList) respond(false, [], 'Recipient list cannot be empty.');
 
-        $senderUser = $db->query("SELECT * FROM bot_users WHERE chat_id = '$senderChatId' AND is_authenticated = 1")->fetch();
+        $senderUser = $db->query("SELECT * FROM bot_users WHERE (account_id = '$senderChatId' OR ll_username = '$senderChatId' OR chat_id = '$senderChatId') AND is_authenticated = 1")->fetch();
         if (!$senderUser) respond(false, [], 'Sender account is not authenticated.');
 
         $lines = preg_split('/[\r\n;]+/', $rawList);
@@ -520,7 +529,7 @@ try {
             respond(false, [], $res['error'] ?? 'Could not install mansion design.');
         }
 
-        $user = $db->query("SELECT * FROM bot_users WHERE chat_id = '$chatId'")->fetch();
+        $user = $db->query("SELECT * FROM bot_users WHERE (account_id = '$chatId' OR ll_username = '$chatId' OR chat_id = '$chatId')")->fetch();
         $owner = $user['ll_username'] ?? 'Owner';
         $mansionName = $tpls[$tplKey]['name'];
 
@@ -572,7 +581,7 @@ try {
             respond(false, [], $res['error'] ?? 'Failed to apply cloned layout.');
         }
 
-        $user = $db->query("SELECT * FROM bot_users WHERE chat_id = '$chatId'")->fetch();
+        $user = $db->query("SELECT * FROM bot_users WHERE (account_id = '$chatId' OR ll_username = '$chatId' OR chat_id = '$chatId')")->fetch();
         $owner = $user['ll_username'] ?? 'Owner';
 
         $alert =
@@ -607,7 +616,7 @@ try {
         }
 
         $grabbed = $res['grabbed'] ?? 0;
-        $user = $db->query("SELECT ll_username FROM bot_users WHERE chat_id = '$chatId'")->fetch();
+        $user = $db->query("SELECT ll_username FROM bot_users WHERE (account_id = '$chatId' OR ll_username = '$chatId' OR chat_id = '$chatId')")->fetch();
         $uName = $user['ll_username'] ?? 'User';
 
         if ($grabbed > 0) {
@@ -668,7 +677,7 @@ try {
             respond(false, [], 'Invalid amount. Try 100M, 1B, 50B, 100B, 1T.');
         }
 
-        $user = $db->query("SELECT * FROM bot_users WHERE chat_id = '$chatId' AND is_authenticated = 1")->fetch();
+        $user = $db->query("SELECT * FROM bot_users WHERE (account_id = '$chatId' OR ll_username = '$chatId' OR chat_id = '$chatId') AND is_authenticated = 1")->fetch();
         if (!$user) respond(false, [], 'Account is not authenticated.');
 
         $pin = $user['pin'] ?? '';

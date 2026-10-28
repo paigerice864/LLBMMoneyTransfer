@@ -1177,6 +1177,11 @@ header("Expires: 0");
                 <label>LagosLife Password:</label>
                 <input type="password" id="modalPassword" class="input-control" placeholder="password">
             </div>
+            <div class="form-group">
+                <label>Transfer PIN (Auto-Saved & Applied):</label>
+                <input type="password" id="modalPin" class="input-control" placeholder="e.g. 1234 (optional)" maxlength="8">
+                <small style="color: var(--text-muted); font-size: 11px; display: block; margin-top: 4px;">Persisted permanently for all instant & batch money transfers</small>
+            </div>
             <button onclick="submitLogin()" id="btnLoginSubmit" class="btn-action">
                 🚀 Authenticate Account
             </button>
@@ -1390,8 +1395,11 @@ header("Expires: 0");
                         </div>
                         <div class="acc-balance">${acc.balance_fmt}</div>
                         <div class="acc-footer">
-                            <span>PIN: ${acc.has_pin ? 'Protected ✅' : 'Not Set'}</span>
-                            <button onclick="refreshSingleBalance('${acc.chat_id}')" class="chip">🔄 Refresh Balance</button>
+                            <span>PIN: ${acc.has_pin ? '<span style="color:#10b981;font-weight:700;">Protected ✅</span>' : '<span style="color:#eab308;font-weight:700;">Not Set ⚠️</span>'}</span>
+                            <div style="display:flex;gap:6px;">
+                                <button onclick="quickSetPin('${acc.chat_id}', '${acc.ll_username}')" class="chip" title="Set or Update Transfer PIN">🔐 PIN</button>
+                                <button onclick="refreshSingleBalance('${acc.chat_id}')" class="chip">🔄 Refresh</button>
+                            </div>
                         </div>
                     </div>
                 `;
@@ -1844,10 +1852,27 @@ header("Expires: 0");
             document.getElementById('loginModal').style.display = 'none';
         }
 
+        async function quickSetPin(accId, username) {
+            const pin = prompt(`Enter Transfer PIN for @${username} (4-8 digits):\nThis will be securely saved to your fleet and auto-applied to all transfers.`);
+            if (!pin) return;
+            if (pin.length < 4) {
+                showToast('PIN must be at least 4 digits', false);
+                return;
+            }
+            const res = await fetchAPI('set_pin', { chat_id: accId, pin: pin });
+            if (res.ok) {
+                showToast(`PIN saved for @${username}!`);
+                refreshData();
+            } else {
+                showToast(res.error || 'Failed to save PIN', false);
+            }
+        }
+
         async function submitLogin() {
             const btn = document.getElementById('btnLoginSubmit');
             const u = document.getElementById('modalUsername').value.trim();
             const p = document.getElementById('modalPassword').value.trim();
+            const pin = document.getElementById('modalPin') ? document.getElementById('modalPin').value.trim() : '';
 
             if (!u || !p) {
                 showToast('Username and password required', false);
@@ -1857,16 +1882,17 @@ header("Expires: 0");
             btn.disabled = true;
             btn.innerText = '⏳ Authenticating…';
 
-            const res = await fetchAPI('login', { username: u, password: p });
+            const res = await fetchAPI('login', { username: u, password: p, pin: pin });
 
             btn.disabled = false;
             btn.innerText = '🚀 Authenticate Account';
 
             if (res.ok) {
-                showToast(`Logged in as @${res.username}!`);
+                showToast(`Connected @${res.username}! Multi-fleet updated.`);
                 closeLoginModal();
                 document.getElementById('modalUsername').value = '';
                 document.getElementById('modalPassword').value = '';
+                if (document.getElementById('modalPin')) document.getElementById('modalPin').value = '';
                 refreshData();
             } else {
                 showToast(res.error || 'Login failed', false);
