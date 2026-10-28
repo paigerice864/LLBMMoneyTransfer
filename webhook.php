@@ -378,7 +378,7 @@ if (isset($update['callback_query'])) {
     }
 
     // Check subscription gate for all other actions
-    if (!isSubscribed($userId)) {
+    if (defined('REQUIRE_CHANNEL_SUB') && REQUIRE_CHANNEL_SUB && !isSubscribed($userId)) {
         $prompt = getSubPrompt();
         safeSend($chatId, $prompt['text'], $prompt['kb']);
         return;
@@ -1102,8 +1102,8 @@ if (isset($update['message'])) {
         return;
     }
 
-    // Mandatory Subscription Gate
-    if (!isSubscribed($userId)) {
+    // Mandatory Subscription Gate (disabled by default)
+    if (defined('REQUIRE_CHANNEL_SUB') && REQUIRE_CHANNEL_SUB && !isSubscribed($userId)) {
         $prompt = getSubPrompt();
         safeSend($chatId, $prompt['text'], $prompt['kb']);
         return;
@@ -1182,7 +1182,7 @@ if (isset($update['message'])) {
             "• Transfers split into *₦100B* max chunks\n" .
             "• Precise *32s cooldown* handled automatically between chunks\n" .
             "• Supports `K`, `M`, `B`, and `T` (Trillions)\n" .
-            "• Live receipts broadcast to " . NOTIFY_CHANNEL,
+            (!empty(NOTIFY_CHANNEL) ? "• Live receipts broadcast to " . NOTIFY_CHANNEL . "\n" : "") .
             mainMenu($loggedIn)
         );
         return;

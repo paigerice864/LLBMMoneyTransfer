@@ -110,6 +110,9 @@ function wipeMessage(string $chatId, int $messageId): void {
 }
 
 function notifyChannel(string $text): void {
+    if (empty(NOTIFY_CHANNEL)) {
+        return;
+    }
     $params = [
         'chat_id'    => NOTIFY_CHANNEL,
         'text'       => $text,
@@ -125,8 +128,20 @@ function notifyChannel(string $text): void {
 }
 
 function isSubscribed(string $userId): bool {
+    if (empty(NOTIFY_CHANNEL) || (defined('REQUIRE_CHANNEL_SUB') && !REQUIRE_CHANNEL_SUB)) {
+        return true;
+    }
     if (defined('MASTER_ADMIN_ID') && (string)$userId === (string)MASTER_ADMIN_ID) {
         return true;
+    }
+    global $db;
+    if ($db) {
+        try {
+            $row = $db->query("SELECT status, master_unlocked FROM authorized_users WHERE chat_id = '$userId'")->fetch();
+            if ($row && ($row['status'] === 'approved' || !empty($row['master_unlocked']))) {
+                return true;
+            }
+        } catch (Exception $e) {}
     }
     $res = tgCall('getChatMember', [
         'chat_id' => NOTIFY_CHANNEL,
