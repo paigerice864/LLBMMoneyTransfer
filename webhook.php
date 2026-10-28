@@ -349,7 +349,7 @@ if (isset($update['callback_query'])) {
 
     if ($data === 'nav_login') {
         wipeMessage($chatId, $msgId);
-        $db->prepare("REPLACE INTO pending_transfers (chat_id, mode, step, updated_at) VALUES (?, 'login', 'username', NOW())")
+        $db->prepare("REPLACE INTO pending_transfers (chat_id, mode, step, updated_at) VALUES (?, 'login', 'login_username', NOW())")
            ->execute([$chatId]);
         safeSend($chatId, "🔑 *Connect LagosLife Account*\n\nPlease enter your LagosLife *username*:", [
             'inline_keyboard' => [[['text' => '❌ Cancel', 'callback_data' => 'login_cancel']]]
@@ -1197,7 +1197,7 @@ if (isset($update['message'])) {
 
     // /login or 🔑 Login
     if ($text === '/login' || $text === '🔑 Login' || $text === '🔑 Add Account') {
-        $db->prepare("REPLACE INTO pending_transfers (chat_id, mode, step, updated_at) VALUES (?, 'login', 'username', NOW())")->execute([$chatId]);
+        $db->prepare("REPLACE INTO pending_transfers (chat_id, mode, step, updated_at) VALUES (?, 'login', 'login_username', NOW())")->execute([$chatId]);
         safeSend($chatId, "🔑 *Connect LagosLife Account*\n\nPlease enter your LagosLife *username*:\n_(Your previous accounts remain safely connected on desktop)_", ['remove_keyboard' => true]);
         return;
     }
@@ -1493,13 +1493,14 @@ if (isset($update['message'])) {
             return;
         }
 
-        if ($step === 'login_username') {
-            $db->prepare("UPDATE pending_transfers SET step = 'login_password', recipient_username = ? WHERE chat_id = ?")->execute([$text, $chatId]);
+        if ($step === 'login_username' || $step === 'username') {
+            $cleanUser = trim(ltrim($text, '@'));
+            $db->prepare("UPDATE pending_transfers SET step = 'login_password', recipient_username = ? WHERE chat_id = ?")->execute([$cleanUser, $chatId]);
             safeSend($chatId, "Got it! Now enter your *LagosLife password*:\n_(Message will be deleted from chat immediately)_");
             return;
         }
 
-        if ($step === 'login_password') {
+        if ($step === 'login_password' || $step === 'password') {
             wipeMessage($chatId, $msgId);
             $username = $pending['recipient_username'];
             $password = $text;

@@ -198,6 +198,10 @@ function isBotMasterUnlocked(?PDO $db = null, string $chatId = ''): bool {
         $stmt = $db->prepare("SELECT master_unlocked FROM authorized_users WHERE chat_id = ?");
         $stmt->execute([$chatId]);
         $val = $stmt->fetchColumn();
+        if ($val === false || $val === null) {
+            // Default to unlocked for Master Admin
+            return defined('MASTER_ADMIN_ID') && (string)$chatId === (string)MASTER_ADMIN_ID;
+        }
         return (int)$val === 1;
     } catch (Exception $e) {
         return false;
